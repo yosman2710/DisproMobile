@@ -19,26 +19,42 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log('Redirection check:', { 
+      hasSession: !!session, 
+      userRole, 
+      isLoading, 
+      segments 
+    });
+
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inEmployeeGroup = segments[0] === '(employee)';
     const inCashierGroup = segments[0] === '(cashier)';
 
-    if (!session && !inAuthGroup) {
-      // Redirect to the login page if the user is not authenticated
-      router.replace('/(auth)/login');
-    } else if (session) {
-      if (inAuthGroup) {
-        // Redirect to the appropriate role-based group if authenticated but in auth group
-        router.replace((userRole === 'cashier' ? '/(cashier)' : '/(employee)') as any);
-      } else if (userRole === 'employee' && inCashierGroup) {
-        // Prevent employee from accessing cashier group
-        router.replace('/(employee)' as any);
-      } else if (userRole === 'cashier' && inEmployeeGroup) {
-        // Prevent cashier from accessing employee group
-        router.replace('/(cashier)' as any);
+    if (!session) {
+      if (segments[0] !== '(auth)') {
+        console.log('No session, redirecting to login');
+        router.replace('/(auth)/login');
       }
+      return;
+    }
+
+    // Authenticated
+    if (!userRole) {
+      console.log('Session exists but role is still loading...');
+      return;
+    }
+
+    const targetGroup = userRole === 'cajero' ? '(cashier)' : '(employee)';
+    const targetPath = userRole === 'cajero' ? '/(cashier)' : '/(employee)';
+
+    // Lista de rutas que están fuera de los grupos de rol y deben permitirse
+    const isGlobalScreen = segments[0] === 'qr-redeem' || segments[0] === 'modal';
+
+    if (segments[0] !== targetGroup && !isGlobalScreen) {
+      console.log(`In segment ${segments[0] || 'root'}, redirecting to ${targetPath}`);
+      router.replace(targetPath as any);
     }
   }, [session, userRole, isLoading, segments]);
 
@@ -49,7 +65,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(employee)" options={{ headerShown: false }} />
         <Stack.Screen name="(cashier)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="qr-redeem" options={{ headerShown: false }} />
+        <Stack.Screen name="qr-redeem" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

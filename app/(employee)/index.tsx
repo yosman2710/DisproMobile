@@ -62,7 +62,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <TouchableOpacity
           style={styles.actionCard}
-          onPress={() => router.push('/qr-redeem' as any)}
+          onPress={() => router.push('/qr-redeem')}
           activeOpacity={0.9}
         >
           <LinearGradient

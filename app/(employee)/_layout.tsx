@@ -43,7 +43,7 @@ export default function TabLayout() {
         },
         tabBarPressColor: 'rgba(26, 35, 126, 0.05)',
         tabBarIcon: ({ color, focused }) => {
-          let ionIcon: any;
+          let ionIcon: any = 'help-circle';
           if (route.name === 'index') ionIcon = 'home';
           else if (route.name === 'explore') ionIcon = 'time';
           else if (route.name === 'benefits') ionIcon = 'gift';

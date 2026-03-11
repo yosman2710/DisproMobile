@@ -40,7 +40,7 @@ export default function CashierLayout() {
                 },
                 tabBarPressColor: 'rgba(26, 35, 126, 0.05)',
                 tabBarIcon: ({ color, focused }) => {
-                    let ionIcon: any;
+                    let ionIcon: any = 'help-circle';
                     if (route.name === 'index') ionIcon = 'scan';
                     else if (route.name === 'history') ionIcon = 'list';
 
@@ -58,18 +58,6 @@ export default function CashierLayout() {
                 name="history"
                 options={{
                     title: 'Historial',
-                }}
-            />
-            <MaterialTopTabs.Screen
-                name="redemption-detail"
-                options={{
-                    href: null, // Hide from tab bar
-                }}
-            />
-            <MaterialTopTabs.Screen
-                name="success"
-                options={{
-                    href: null, // Hide from tab bar
                 }}
             />
         </MaterialTopTabs>

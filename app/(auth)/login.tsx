@@ -4,20 +4,28 @@ import { useAuth, UserRole } from '@/context/AuthContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+
+const SECURE_STORE_KEY = 'user_credentials';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [nombre, setNombre] = useState('');
+    const [cedula, setCedula] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
-    const [selectedRole, setSelectedRole] = useState<UserRole>('employee');
-    const { signIn } = useAuth();
+    const [selectedRole, setSelectedRole] = useState<UserRole>('empleado');
+    const [isSignup, setIsSignup] = useState(false);
+
+    const { signIn, signUp } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
         checkBiometricSupport();
+        loadSavedCredentials();
     }, []);
 
     const checkBiometricSupport = async () => {
@@ -26,21 +34,74 @@ export default function LoginScreen() {
         setIsBiometricSupported(compatible && enrolled);
     };
 
+    const loadSavedCredentials = async () => {
+        try {
+            const credentials = await SecureStore.getItemAsync(SECURE_STORE_KEY);
+            if (credentials) {
+                const { email: savedEmail } = JSON.parse(credentials);
+                setEmail(savedEmail);
+            }
+        } catch (error) {
+            console.error('Error loading credentials:', error);
+        }
+    };
+
     const handleLogin = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Por favor ingresa tu correo y contraseña');
             return;
         }
         setIsLoggingIn(true);
-        // Simulate API call
-        setTimeout(() => {
-            signIn(selectedRole);
+        console.log('Logging in with:', email, password);
+        try {
+            const { error } = await signIn(email, password);
+            console.log('Login result:', error);
+            if (error) {
+                Alert.alert('Error de Inicio de Sesión', error.message);
+            } else {
+                // Save credentials for biometric auth
+                await SecureStore.setItemAsync(SECURE_STORE_KEY, JSON.stringify({ email, password }));
+            }
+        } catch (e: any) {
+            Alert.alert('Error', e.message);
+        } finally {
             setIsLoggingIn(false);
-        }, 1500);
+        }
+    };
+
+    const handleSignup = async () => {
+        if (!email || !password || !nombre || !cedula) {
+            Alert.alert('Error', 'Por favor completa todos los campos');
+            return;
+        }
+        setIsLoggingIn(true);
+        try {
+            const { error } = await signUp(email, password, {
+                nombre,
+                cedula: parseInt(cedula),
+                rol: selectedRole
+            });
+            if (error) {
+                Alert.alert('Error de Registro', error.message);
+            } else {
+                Alert.alert('Éxito', 'Usuario registrado correctamente. Por favor verifica tu correo si es necesario.');
+                setIsSignup(false);
+            }
+        } catch (e: any) {
+            Alert.alert('Error', e.message);
+        } finally {
+            setIsLoggingIn(false);
+        }
     };
 
     const handleBiometricAuth = async () => {
         try {
+            const credentials = await SecureStore.getItemAsync(SECURE_STORE_KEY);
+            if (!credentials) {
+                Alert.alert('Aviso', 'No hay credenciales guardadas. Inicia sesión manualmente primero.');
+                return;
+            }
+
             const result = await LocalAuthentication.authenticateAsync({
                 promptMessage: 'Autenticación Biométrica',
                 fallbackLabel: 'Usar contraseña',
@@ -48,11 +109,13 @@ export default function LoginScreen() {
             });
 
             if (result.success) {
+                const { email: savedEmail, password: savedPassword } = JSON.parse(credentials);
                 setIsLoggingIn(true);
-                setTimeout(() => {
-                    signIn(selectedRole);
-                    setIsLoggingIn(false);
-                }, 1000);
+                const { error } = await signIn(savedEmail, savedPassword);
+                if (error) {
+                    Alert.alert('Error', 'Las credenciales guardadas ya no son válidas.');
+                }
+                setIsLoggingIn(false);
             }
         } catch (error) {
             Alert.alert('Error', 'Hubo un fallo en la autenticación biométrica');
@@ -65,106 +128,174 @@ export default function LoginScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <View style={styles.logoContainer}>
-                    <Image
-                        source={require('@/assets/images/icon.png')}
-                        style={styles.logo}
-                        resizeMode="contain"
-                    />
-                    <ThemedText type="title" style={styles.title}>DisproMovil</ThemedText>
-                    <ThemedText style={styles.subtitle}>Gestión de préstamos y clientes</ThemedText>
-                </View>
-
-                <View style={styles.formContainer}>
-                    <View style={styles.inputWrapper}>
-                        <ThemedText style={styles.label}>Correo Electrónico</ThemedText>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="usuario@ejemplo.com"
-                            placeholderTextColor="#888"
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <View style={styles.logoContainer}>
+                        <Image
+                            source={require('@/assets/images/icon.png')}
+                            style={styles.logo}
+                            resizeMode="contain"
                         />
+                        <ThemedText type="title" style={styles.title}>DisproMovil</ThemedText>
+                        <ThemedText style={styles.subtitle}>
+                            {isSignup ? 'Crea tu cuenta de ' + (selectedRole === 'cajero' ? 'Cajero' : 'Empleado') : 'Gestión de préstamos y clientes'}
+                        </ThemedText>
                     </View>
 
-                    <View style={styles.inputWrapper}>
-                        <ThemedText style={styles.label}>Contraseña</ThemedText>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="••••••••"
-                            placeholderTextColor="#888"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                        />
-                    </View>
+                    <View style={styles.formContainer}>
+                        {isSignup && (
+                            <>
+                                <View style={styles.inputWrapper}>
+                                    <ThemedText style={styles.label}>Nombre Completo</ThemedText>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Tu nombre"
+                                        placeholderTextColor="#888"
+                                        value={nombre}
+                                        onChangeText={setNombre}
+                                    />
+                                </View>
+                                <View style={styles.inputWrapper}>
+                                    <ThemedText style={styles.label}>Cédula</ThemedText>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="123456789"
+                                        placeholderTextColor="#888"
+                                        value={cedula}
+                                        onChangeText={setCedula}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+                            </>
+                        )}
 
-                    <View style={styles.roleSelectorContainer}>
-                        <ThemedText style={styles.label}>Seleccionar Rol</ThemedText>
-                        <View style={styles.roleButtonsRow}>
-                            <TouchableOpacity
-                                style={[styles.roleOption, selectedRole === 'employee' && styles.roleOptionActive]}
-                                onPress={() => setSelectedRole('employee')}
-                            >
-                                <Ionicons
-                                    name="person-outline"
-                                    size={18}
-                                    color={selectedRole === 'employee' ? 'white' : '#1a237e'}
-                                />
-                                <ThemedText style={[styles.roleOptionText, selectedRole === 'employee' && styles.roleOptionTextActive]}>
-                                    Empleado
-                                </ThemedText>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.roleOption, selectedRole === 'cashier' && styles.roleOptionActive]}
-                                onPress={() => setSelectedRole('cashier')}
-                            >
-                                <Ionicons
-                                    name="cash-outline"
-                                    size={18}
-                                    color={selectedRole === 'cashier' ? 'white' : '#1a237e'}
-                                />
-                                <ThemedText style={[styles.roleOptionText, selectedRole === 'cashier' && styles.roleOptionTextActive]}>
-                                    Cajero
-                                </ThemedText>
-                            </TouchableOpacity>
+                        <View style={styles.inputWrapper}>
+                            <ThemedText style={styles.label}>Correo Electrónico</ThemedText>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="usuario@ejemplo.com"
+                                placeholderTextColor="#888"
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                            />
                         </View>
-                    </View>
 
-                    <View style={styles.buttonRow}>
-                        <TouchableOpacity
-                            style={[styles.loginButton, isBiometricSupported && styles.loginButtonWithBiometric]}
-                            onPress={handleLogin}
-                            disabled={isLoggingIn}
-                        >
-                            {isLoggingIn ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <ThemedText style={styles.loginButtonText}>Iniciar Sesión</ThemedText>
-                            )}
-                        </TouchableOpacity>
+                        <View style={styles.inputWrapper}>
+                            <ThemedText style={styles.label}>Contraseña</ThemedText>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="••••••••"
+                                placeholderTextColor="#888"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                            />
+                        </View>
 
-                        {isBiometricSupported && (
+                        {isSignup && (
+                            <View style={styles.roleSelectorContainer}>
+                                <ThemedText style={styles.label}>
+                                    Selecciona tu Rol
+                                </ThemedText>
+                                <View style={styles.roleButtonsRow}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.roleCard,
+                                            selectedRole === 'empleado' && styles.roleCardActive
+                                        ]}
+                                        onPress={() => setSelectedRole('empleado')}
+                                    >
+                                        <View style={[styles.roleIconContainer, selectedRole === 'empleado' && styles.roleIconContainerActive]}>
+                                            <Ionicons
+                                                name="person-outline"
+                                                size={24}
+                                                color={selectedRole === 'empleado' ? 'white' : '#1a237e'}
+                                            />
+                                        </View>
+                                        <View>
+                                            <ThemedText style={[styles.roleCardTitle, selectedRole === 'empleado' && styles.roleCardTextActive]}>
+                                                Empleado
+                                            </ThemedText>
+                                            <ThemedText style={[styles.roleCardSub, selectedRole === 'empleado' && styles.roleCardTextActive]}>
+                                                Acceso a préstamos
+                                            </ThemedText>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.roleCard,
+                                            selectedRole === 'cajero' && styles.roleCardActive
+                                        ]}
+                                        onPress={() => setSelectedRole('cajero')}
+                                    >
+                                        <View style={[styles.roleIconContainer, selectedRole === 'cajero' && styles.roleIconContainerActive]}>
+                                            <Ionicons
+                                                name="cash-outline"
+                                                size={24}
+                                                color={selectedRole === 'cajero' ? 'white' : '#1a237e'}
+                                            />
+                                        </View>
+                                        <View>
+                                            <ThemedText style={[styles.roleCardTitle, selectedRole === 'cajero' && styles.roleCardTextActive]}>
+                                                Cajero
+                                            </ThemedText>
+                                            <ThemedText style={[styles.roleCardSub, selectedRole === 'cajero' && styles.roleCardTextActive]}>
+                                                Gestión de canjes
+                                            </ThemedText>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.buttonRow}>
                             <TouchableOpacity
-                                style={styles.biometricButton}
-                                onPress={handleBiometricAuth}
+                                style={[styles.loginButton, (!isSignup && isBiometricSupported) && styles.loginButtonWithBiometric]}
+                                onPress={isSignup ? handleSignup : handleLogin}
                                 disabled={isLoggingIn}
                             >
-                                <MaterialCommunityIcons
-                                    name={Platform.OS === 'ios' ? 'face-recognition' : 'fingerprint'}
-                                    size={32}
-                                    color="#007AFF"
-                                />
+                                {isLoggingIn ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <ThemedText style={styles.loginButtonText}>
+                                        {isSignup ? 'Registrarse' : 'Iniciar Sesión'}
+                                    </ThemedText>
+                                )}
+                            </TouchableOpacity>
+
+                            {!isSignup && isBiometricSupported && (
+                                <TouchableOpacity
+                                    style={styles.biometricButton}
+                                    onPress={handleBiometricAuth}
+                                    disabled={isLoggingIn}
+                                >
+                                    <MaterialCommunityIcons
+                                        name={Platform.OS === 'ios' ? 'face-recognition' : 'fingerprint'}
+                                        size={32}
+                                        color="#007AFF"
+                                    />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.toggleSignup}
+                            onPress={() => setIsSignup(!isSignup)}
+                        >
+                            <ThemedText style={styles.toggleSignupText}>
+                                {isSignup ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                            </ThemedText>
+                        </TouchableOpacity>
+
+                        {!isSignup && (
+                            <TouchableOpacity style={styles.forgotPassword}>
+                                <ThemedText style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</ThemedText>
                             </TouchableOpacity>
                         )}
                     </View>
-
-                    <TouchableOpacity style={styles.forgotPassword}>
-                        <ThemedText style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</ThemedText>
-                    </TouchableOpacity>
-                </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </ThemedView>
     );
@@ -176,12 +307,15 @@ const styles = StyleSheet.create({
     },
     keyboardView: {
         flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: 'center',
         padding: 24,
     },
     logoContainer: {
         alignItems: 'center',
-        marginBottom: 48,
+        marginBottom: 32,
     },
     logo: {
         width: 100,
@@ -202,7 +336,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     inputWrapper: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     label: {
         marginBottom: 8,
@@ -215,7 +349,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 16,
         fontSize: 16,
-        color: '#333',
+        color: '#ffffffff',
     },
     buttonRow: {
         flexDirection: 'row',
@@ -254,12 +388,21 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    forgotPassword: {
+    toggleSignup: {
         marginTop: 20,
         alignItems: 'center',
     },
-    forgotPasswordText: {
+    toggleSignupText: {
         color: '#007AFF',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    forgotPassword: {
+        marginTop: 15,
+        alignItems: 'center',
+    },
+    forgotPasswordText: {
+        color: '#ffffffff',
         fontSize: 14,
     },
     roleSelectorContainer: {
@@ -268,30 +411,51 @@ const styles = StyleSheet.create({
     roleButtonsRow: {
         flexDirection: 'row',
         gap: 12,
-        marginTop: 8,
+        marginTop: 12,
     },
-    roleOption: {
+    roleCard: {
         flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        borderRadius: 12,
-        backgroundColor: '#f0f2ff',
-        borderWidth: 1,
+        backgroundColor: '#f8faff',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 2,
         borderColor: '#e0e4ff',
-        gap: 8,
+        alignItems: 'center',
+        gap: 12,
     },
-    roleOptionActive: {
+    roleCardActive: {
         backgroundColor: '#1a237e',
         borderColor: '#1a237e',
+        shadowColor: '#1a237e',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
-    roleOptionText: {
-        fontSize: 14,
-        fontWeight: '700',
+    roleIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(26, 35, 126, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    roleIconContainerActive: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    roleCardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
         color: '#1a237e',
+        textAlign: 'center',
     },
-    roleOptionTextActive: {
+    roleCardSub: {
+        fontSize: 11,
+        color: '#666',
+        textAlign: 'center',
+        marginTop: 2,
+    },
+    roleCardTextActive: {
         color: 'white',
     },
 });
