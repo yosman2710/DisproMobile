@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -8,7 +8,23 @@ import { ThemedView } from '@/components/themed-view';
 
 export default function RedemptionSuccessScreen() {
     const router = useRouter();
-    const { total, employeeName } = useLocalSearchParams();
+    const params = useLocalSearchParams();
+    const total = params.total || '0.00';
+    const employeeName = params.employeeName || 'Empleado';
+    const newBalance = params.newBalance || '0.00';
+    const timestamp = params.timestamp;
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            router.replace('/(cashier)' as any);
+        }, 5000);
+
+        return () => clearTimeout(timer);
+    }, [router]);
+
+    const date = timestamp ? new Date(timestamp as string) : new Date();
+    const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
     return (
         <ThemedView style={styles.container}>
@@ -37,25 +53,29 @@ export default function RedemptionSuccessScreen() {
 
                     <View style={styles.ticketRow}>
                         <ThemedText style={styles.rowLabel}>Nuevo Saldo</ThemedText>
-                        <ThemedText style={[styles.rowValue, { color: '#1a237e' }]}>$90.00</ThemedText>
+                        <ThemedText style={[styles.rowValue, { color: '#4CAF50' }]}>${newBalance}</ThemedText>
                     </View>
 
                     <View style={styles.divider} />
 
                     <View style={styles.ticketRow}>
                         <ThemedText style={styles.rowLabel}>Fecha</ThemedText>
-                        <ThemedText style={styles.rowValue}>10 Mar 2026</ThemedText>
+                        <ThemedText style={styles.rowValue}>{dateStr}</ThemedText>
                     </View>
 
                     <View style={styles.ticketRow}>
                         <ThemedText style={styles.rowLabel}>Hora</ThemedText>
-                        <ThemedText style={styles.rowValue}>11:45 AM</ThemedText>
+                        <ThemedText style={styles.rowValue}>{timeStr}</ThemedText>
                     </View>
 
                     <View style={styles.idContainer}>
-                        <ThemedText style={styles.idLabel}>ID TRANSACCIÓN: TR-8829</ThemedText>
+                        <ThemedText style={styles.idLabel}>OPERACIÓN COMPLETADA CON ÉXITO</ThemedText>
                     </View>
                 </View>
+                
+                <ThemedText style={{ marginTop: 24, fontSize: 12, color: '#999' }}>
+                    Redirigiendo automáticamente en unos segundos...
+                </ThemedText>
             </View>
 
             <View style={styles.footer}>

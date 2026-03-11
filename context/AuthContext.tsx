@@ -11,6 +11,7 @@ type AuthContextType = {
     signIn: (email: string, password: string) => Promise<{ error: any }>;
     signUp: (email: string, password: string, metadata: { cedula: number; nombre: string; rol: UserRole }) => Promise<{ error: any }>;
     signOut: () => Promise<void>;
+    user: any | null;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,12 +20,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [userRole, setUserRole] = useState<UserRole | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<any | null>(null);
 
     useEffect(() => {
         // Check for active session
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             if (session) {
+                setUser(session.user);
                 fetchUserProfile(session.user.id);
             } else {
                 setIsLoading(false);
@@ -36,7 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('Auth event:', event);
             setSession(session);
             if (session) {
-                setIsLoading(true); // Ensure we wait for the profile
+                setIsLoading(true);
+                setUser(session.user);
                 fetchUserProfile(session.user.id);
             } else {
                 setUserRole(null);
@@ -63,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.warn('No profile found in "perfiles" table for user:', userId);
                 setUserRole(null);
             }
-            
+
             if (error) {
                 console.error('Database error in fetchUserProfile:', error.message, error.details);
             }
@@ -98,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ session, userRole, isLoading, signIn, signUp, signOut }}>
+        <AuthContext.Provider value={{ session, userRole, isLoading, signIn, signUp, signOut, user }}>
             {children}
         </AuthContext.Provider>
     );

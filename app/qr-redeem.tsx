@@ -1,17 +1,85 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Dimensions, StyleSheet, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
+const TOKEN_EXPIRY_MINUTES = 5;
 
 export default function QRRedeemScreen() {
     const router = useRouter();
-    const mockValue = 'DISPRO-MOCK-TOKEN-12345';
+    const { user } = useAuth();
+    const [token, setToken] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+
+    const generateToken = useCallback(async () => {
+        if (!user) return;
+        
+        setLoading(true);
+        try {
+            const expiryDate = new Date();
+            expiryDate.setMinutes(expiryDate.getMinutes() + TOKEN_EXPIRY_MINUTES);
+
+            const { data, error } = await supabase
+                .from('qr_tokens')
+                .insert({
+                    perfil_id: user.id,
+                    expira_at: expiryDate.toISOString(),
+                })
+                .select('token_auth')
+                .single();
+
+            if (data) {
+                setToken(data.token_auth);
+                const diff = Math.floor((expiryDate.getTime() - new Date().getTime()) / 1000);
+                setTimeLeft(diff > 0 ? diff : 0);
+            }
+            if (error) console.error('Error generating token:', error);
+        } catch (err) {
+            console.error('Critical error generating token:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
+
+    useEffect(() => {
+        generateToken();
+    }, [generateToken]);
+
+    // Timer logic
+    useEffect(() => {
+        if (timeLeft <= 0 || loading) {
+            if (timeLeft === 0 && token) {
+                generateToken(); // Refresh if expired
+            }
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setTimeLeft(prev => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [timeLeft, loading, token, generateToken]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
 
     return (
         <ThemedView style={styles.container}>
@@ -30,22 +98,38 @@ export default function QRRedeemScreen() {
                     </ThemedText>
 
                     <View style={styles.qrWrapper}>
-                        <QRCode
-                            value={mockValue}
-                            size={width * 0.6}
-                            color="#1a237e"
-                            backgroundColor="white"
-                        />
+                        {loading ? (
+                            <View style={{ width: width * 0.6, height: width * 0.6, justifyContent: 'center' }}>
+                                <ActivityIndicator size="large" color="#1a237e" />
+                            </View>
+                        ) : token ? (
+                            <QRCode
+                                value={token}
+                                size={width * 0.6}
+                                color="#1a237e"
+                                backgroundColor="white"
+                            />
+                        ) : (
+                            <ThemedText style={{ color: 'red' }}>Error al generar token</ThemedText>
+                        )}
                     </View>
 
                     <View style={styles.tokenBox}>
                         <ThemedText style={styles.tokenLabel}>Token de Transacción:</ThemedText>
-                        <ThemedText style={styles.tokenValue}>{mockValue}</ThemedText>
+                        <ThemedText style={styles.tokenValue} numberOfLines={1}>
+                            {loading ? 'Generando...' : token || '---'}
+                        </ThemedText>
                     </View>
 
-                    <View style={styles.expiryBadge}>
-                        <Ionicons name="time-outline" size={16} color="#F44336" />
-                        <ThemedText style={styles.expiryText}>Expira en 09:59</ThemedText>
+                    <View style={[styles.expiryBadge, timeLeft < 60 && { backgroundColor: '#fff1f0' }]}>
+                        <Ionicons 
+                            name="time-outline" 
+                            size={16} 
+                            color={timeLeft < 60 ? "#F44336" : "#666"} 
+                        />
+                        <ThemedText style={[styles.expiryText, timeLeft < 60 && { color: '#F44336' }]}>
+                            Expira en {formatTime(timeLeft)}
+                        </ThemedText>
                     </View>
                 </View>
 
@@ -149,7 +233,7 @@ const styles = StyleSheet.create({
     expiryText: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#F44336',
+        color: '#666',
     },
     cancelBtn: {
         marginTop: 32,

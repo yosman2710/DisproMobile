@@ -1,57 +1,128 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Dimensions, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Dimensions, FlatList, ImageBackground, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
 
-const BENEFITS = [
-    { id: '1', name: 'Vale de Almuerzo', cost: '50.00', icon: 'fast-food', color: '#FF9800', desc: 'Canjeable en cafetería' },
-    { id: '2', name: 'Día Libre', cost: '500.00', icon: 'calendar', color: '#2196F3', desc: 'Previa autorización' },
-    { id: '3', name: 'Bono Cine', cost: '120.00', icon: 'film', color: '#E91E63', desc: 'Válido para 2 personas' },
-    { id: '4', name: 'Gift Card $20', cost: '200.00', icon: 'gift', color: '#9C27B0', desc: 'Tiendas afiliadas' },
-    { id: '5', name: 'Kit Escolar', cost: '150.00', icon: 'book', color: '#4CAF50', desc: 'Útiles básicos' },
-    { id: '6', name: 'Suscripciones', cost: '300.00', icon: 'fitness', color: '#FF5722', desc: 'Gimnasio o Streaming' },
-];
+interface Benefit {
+    id: number;
+    nombre: string;
+    costo_moneda: number;
+    stock: number;
+    descripcion?: string;
+    imagen_url?: string;
+}
+
+// Mapeo de imágenes locales para resolver strings de la base de datos
+const IMAGE_MAPPING: Record<string, any> = {
+    'almuerzos': require('@/assets/images/almuerzos.png'),
+    'cine': require('@/assets/images/cine.png'),
+    'gift_card': require('@/assets/images/gift_card.png'),
+};
 
 export default function BenefitsScreen() {
-    const renderItem = ({ item }: { item: typeof BENEFITS[0] }) => (
-        <TouchableOpacity style={styles.card} activeOpacity={0.9}>
-            <View style={[styles.iconContainer, { backgroundColor: item.color + '10' }]}>
-                <Ionicons name={item.icon as any} size={36} color={item.color} />
-            </View>
-            <View style={styles.cardContent}>
-                <ThemedText style={styles.cardName} numberOfLines={1}>{item.name}</ThemedText>
-                <ThemedText style={styles.cardDesc} numberOfLines={1}>{item.desc}</ThemedText>
+    const [benefits, setBenefits] = useState<Benefit[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
 
-                <View style={styles.costRow}>
-                    <View style={styles.costBadge}>
-                        <Ionicons name="flash" size={12} color="#b28900" />
-                        <ThemedText style={styles.costText}>{item.cost}</ThemedText>
-                    </View>
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+    const fetchBenefits = useCallback(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('beneficios')
+                .select('*')
+                .order('nombre');
+
+            if (error) {
+                console.error('Database error fetching benefits:', error);
+            } else {
+                setBenefits(data || []);
+            }
+        } catch (err) {
+            console.error('Critical error in fetchBenefits:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchBenefits();
+    }, [fetchBenefits]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchBenefits();
+        setRefreshing(false);
+    }, [fetchBenefits]);
+
+    const renderItem = ({ item }: { item: Benefit }) => {
+        const localSource = IMAGE_MAPPING[item.imagen_url || ''] || IMAGE_MAPPING['gift_card'];
+
+        return (
+            <TouchableOpacity style={styles.card} activeOpacity={0.9}>
+                <ImageBackground
+                    source={localSource}
+                    style={styles.cardImage}
+                    imageStyle={styles.imageRadius}
+                >
+                    <LinearGradient
+                        colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.9)']}
+                        style={styles.cardGradient}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={styles.stockBadge}>
+                                <ThemedText style={styles.stockText}>{item.stock} disp.</ThemedText>
+                            </View>
+                        </View>
+
+                        <View style={styles.cardFooter}>
+                            <ThemedText style={styles.cardName} numberOfLines={1}>{item.nombre}</ThemedText>
+                            <View style={styles.footerRow}>
+                                <View style={styles.costContainer}>
+                                    <ThemedText style={styles.costText}>
+                                        ${item.costo_moneda.toLocaleString('en-US', { minimumFractionDigits: 0 })}
+                                    </ThemedText>
+                                </View>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </ImageBackground>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <ThemedView style={styles.container}>
             <View style={styles.header}>
-                <ThemedText style={styles.headerTitle}>Beneficios</ThemedText>
-                <ThemedText style={styles.headerSubtitle}>Canjea tus puntos acumulados por recompensas exclusivas.</ThemedText>
+                <View style={styles.headerTop}>
+                    <ThemedText style={styles.headerTitle}>Beneficios</ThemedText>
+                    <TouchableOpacity onPress={() => onRefresh()} style={styles.refreshIcon}>
+                        <Ionicons name="refresh" size={20} color="#1a237e" />
+                    </TouchableOpacity>
+                </View>
+                <ThemedText style={styles.headerSubtitle}>Tus puntos acumulados te esperan. Elige tu recompensa favorita.</ThemedText>
             </View>
 
             <FlatList
-                data={BENEFITS}
+                data={benefits}
                 renderItem={renderItem}
-                keyExtractor={item => item.id}
+                keyExtractor={item => item.id.toString()}
                 numColumns={2}
                 contentContainerStyle={styles.listContent}
                 columnWrapperStyle={styles.columnWrapper}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1a237e']} />
+                }
+                ListEmptyComponent={
+                    <View style={styles.emptyStateContainer}>
+                        <Ionicons name="gift-outline" size={80} color="#f0f0f0" />
+                        <ThemedText style={styles.emptyStateTitle}>¡Aún no hay beneficios!</ThemedText>
+                        <ThemedText style={styles.emptyStateText}>Estamos preparando las mejores recompensas para ti. Vuelve pronto.</ThemedText>
+                    </View>
+                }
             />
         </ThemedView>
     );
@@ -68,9 +139,19 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         paddingBottom: 20,
     },
+    headerTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    refreshIcon: {
+        padding: 8,
+        backgroundColor: '#f0f2ff',
+        borderRadius: 12,
+    },
     headerTitle: {
         fontSize: 28,
-        fontWeight: '800',
+        fontWeight: '900',
         color: '#1a237e',
     },
     headerSubtitle: {
@@ -80,7 +161,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     listContent: {
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         paddingBottom: 40,
     },
     columnWrapper: {
@@ -88,58 +169,92 @@ const styles = StyleSheet.create({
     },
     card: {
         width: CARD_WIDTH,
-        backgroundColor: '#ffffff',
-        borderRadius: 24,
+        height: CARD_WIDTH * 1.5,
+        borderRadius: 28,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#f0f0f0',
-        overflow: 'hidden',
-        elevation: 4,
+        backgroundColor: '#f8f9fa',
+        elevation: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        overflow: 'hidden',
     },
-    iconContainer: {
+    cardImage: {
+        flex: 1,
         width: '100%',
-        height: 100,
-        alignItems: 'center',
-        justifyContent: 'center',
+        height: '100%',
     },
-    cardContent: {
-        padding: 14,
+    imageRadius: {
+        borderRadius: 28,
+    },
+    cardGradient: {
+        flex: 1,
+        padding: 16,
+        justifyContent: 'space-between',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+    },
+    stockBadge: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+    },
+    stockText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    cardFooter: {
+        gap: 8,
+    },
+    footerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     cardName: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: '#1a1a1a',
+        fontSize: 18,
+        fontWeight: '900',
+        color: '#ffffff',
+        textShadowColor: 'rgba(0, 0, 0, 0.8)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
-    cardDesc: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 2,
-        marginBottom: 10,
-    },
-    costRow: {
+    costContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
-    },
-    costBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fffcf0',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 10,
         gap: 4,
-        borderWidth: 1,
-        borderColor: '#ffecb3',
     },
     costText: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#b28900',
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#FFD700',
+        textShadowColor: 'rgba(0, 0, 0, 0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
-
+    emptyStateContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 80,
+        paddingHorizontal: 40,
+    },
+    emptyStateTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: '#333',
+        marginTop: 20,
+        marginBottom: 8,
+    },
+    emptyStateText: {
+        color: '#999',
+        fontSize: 15,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
 });

@@ -1,47 +1,105 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FlatList, Modal, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
-const MOVEMENTS = [
-  { id: '1', type: 'Ingreso', amount: '+250.00', date: '10 Mar 2026', time: '10:30 AM', icon: 'trending-up', color: '#4CAF50', authorizer: 'Admin Principal', location: 'Oficina Central', balance: '$1,280.00' },
-  { id: '2', type: 'Canje', amount: '-120.00', date: '09 Mar 2026', time: '04:15 PM', icon: 'cart', color: '#F44336', authorizer: 'Supervisor Juan', location: 'Tienda Norte', balance: '$1,030.00' },
-  { id: '3', type: 'Ingreso', amount: '+100.00', date: '08 Mar 2026', time: '09:00 AM', icon: 'trending-up', color: '#4CAF50', authorizer: 'Admin Principal', location: 'Oficina Central', balance: '$1,150.00' },
-  { id: '4', type: 'Canje', amount: '-50.00', date: '07 Mar 2026', time: '11:45 AM', icon: 'cart', color: '#F44336', authorizer: 'Supervisor Ana', location: 'Tienda Sur', balance: '$1,050.00' },
-  { id: '5', type: 'Ingreso', amount: '+500.00', date: '05 Mar 2026', time: '08:30 AM', icon: 'trending-up', color: '#4CAF50', authorizer: 'Sistema', location: 'Bono Desempeño', balance: '$1,100.00' },
-];
+interface Transaction {
+  id: number;
+  tipo: 'deposito' | 'canje';
+  monto_total: number;
+  fecha: string;
+  motivo?: string;
+  ejecutor?: { nombre: string };
+}
 
 export default function HistoryScreen() {
+  const { user } = useAuth();
   const [filter, setFilter] = useState('Todos');
-  const [selectedItem, setSelectedItem] = useState<typeof MOVEMENTS[0] | null>(null);
+  const [movements, setMovements] = useState<Transaction[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Transaction | null>(null);
 
-  const filteredMovements = MOVEMENTS.filter(m =>
-    filter === 'Todos' || m.type === filter
-  );
+  const fetchTransactions = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('transacciones')
+        .select(`
+          id, 
+          tipo, 
+          monto_total, 
+          fecha,
+          motivo,
+          ejecutor:ejecutor_id(nombre)
+        `)
+        .eq('perfil_id', user.id)
+        .order('fecha', { ascending: false });
 
-  const renderItem = ({ item }: { item: typeof MOVEMENTS[0] }) => (
-    <TouchableOpacity
-      style={styles.movementCard}
-      onPress={() => setSelectedItem(item)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconBox, { backgroundColor: item.color + '10' }]}>
-        <Ionicons name={item.icon as any} size={22} color={item.color} />
-      </View>
-      <View style={styles.cardInfo}>
-        <ThemedText style={styles.typeText}>{item.type}</ThemedText>
-        <ThemedText style={styles.dateText}>{item.date} • {item.time}</ThemedText>
-      </View>
-      <View style={styles.amountContainer}>
-        <ThemedText style={[styles.amountText, { color: item.color }]}>
-          {item.amount}
-        </ThemedText>
-        <Ionicons name="chevron-forward" size={16} color="#ccc" />
-      </View>
-    </TouchableOpacity>
-  );
+      if (data) {
+        setMovements(data as unknown as Transaction[]);
+      }
+      if (error) console.error('Error fetching transactions:', error);
+    } catch (err) {
+      console.error('Error in fetchTransactions:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTransactions();
+    setRefreshing(false);
+  }, [fetchTransactions]);
+
+  const filteredMovements = movements.filter(m => {
+    if (filter === 'Todos') return true;
+    if (filter === 'Ingresos') return m.tipo === 'deposito';
+    if (filter === 'Canjes') return m.tipo === 'canje';
+    return true;
+  });
+
+  const getStyle = (tipo: string) => {
+    return tipo === 'deposito' 
+      ? { icon: 'trending-up', color: '#4CAF50', label: 'Depósito', prefix: '+' }
+      : { icon: 'cart', color: '#F44336', label: 'Canje', prefix: '-' };
+  };
+
+  const renderItem = ({ item }: { item: Transaction }) => {
+    const style = getStyle(item.tipo);
+    const date = new Date(item.fecha);
+    const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+    return (
+      <TouchableOpacity
+        style={styles.movementCard}
+        onPress={() => setSelectedItem(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.iconBox, { backgroundColor: style.color + '10' }]}>
+          <Ionicons name={style.icon as any} size={22} color={style.color} />
+        </View>
+        <View style={styles.cardInfo}>
+          <ThemedText style={styles.typeText}>{style.label}</ThemedText>
+          <ThemedText style={styles.dateText}>{dateStr} • {timeStr}</ThemedText>
+        </View>
+        <View style={styles.amountContainer}>
+          <ThemedText style={[styles.amountText, { color: style.color }]}>
+            {style.prefix}{item.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </ThemedText>
+          <Ionicons name="chevron-forward" size={16} color="#ccc" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -65,9 +123,18 @@ export default function HistoryScreen() {
       <FlatList
         data={filteredMovements}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1a237e']} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyStateContainer}>
+            <Ionicons name="receipt-outline" size={64} color="#eee" />
+            <ThemedText style={styles.emptyStateText}>No tienes transacciones en este momento</ThemedText>
+          </View>
+        }
       />
 
       <Modal
@@ -86,19 +153,35 @@ export default function HistoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {selectedItem && (
-              <View style={styles.detailsList}>
-                <DetailRow label="Tipo de Operación" value={selectedItem.type} color={selectedItem.color} />
-                <DetailRow label="Monto total" value={selectedItem.amount} color={selectedItem.color} bold />
-                <DetailRow label="Fecha y Hora" value={`${selectedItem.date} ${selectedItem.time}`} />
-                <DetailRow label="Autorizado por" value={selectedItem.authorizer} />
-                <DetailRow label="Lugar de operacion" value={selectedItem.location} />
-
-                <View style={styles.modalDivider} />
-
-                <DetailRow label="Saldo Final" value={selectedItem.balance} bold />
-              </View>
-            )}
+            {selectedItem && (() => {
+              const style = getStyle(selectedItem.tipo);
+              const date = new Date(selectedItem.fecha);
+              const fullDate = date.toLocaleString('es-ES', { 
+                day: '2-digit', month: 'long', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+              });
+              
+              return (
+                <View style={styles.detailsList}>
+                  <DetailRow label="Tipo de Operación" value={style.label} color={style.color} />
+                  <DetailRow 
+                    label="Monto total" 
+                    value={`${style.prefix}${selectedItem.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} 
+                    color={style.color} 
+                    bold 
+                  />
+                  <DetailRow label="Fecha y Hora" value={fullDate} />
+                  {selectedItem.motivo && <DetailRow label="Concepto/Motivo" value={selectedItem.motivo} />}
+                  <DetailRow label="Autorizado por" value={selectedItem.ejecutor?.nombre || 'Sistema'} />
+                  
+                  <View style={styles.modalDivider} />
+                  
+                  <ThemedText style={{ fontSize: 12, color: '#999', textAlign: 'center' }}>
+                    ID de transacción: {selectedItem.id}
+                  </ThemedText>
+                </View>
+              );
+            })()}
 
             <TouchableOpacity
               style={styles.printBtn}
@@ -294,5 +377,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '700',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+    gap: 16,
+  },
+  emptyStateText: {
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });

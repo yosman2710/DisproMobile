@@ -1,45 +1,110 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { supabase } from '@/lib/supabase';
 
-const RECENTS = [
-  { id: '1', type: 'Ingreso', amount: '+250.00', date: 'Hoy, 10:30 AM', icon: 'trending-up', color: '#4CAF50' },
-  { id: '2', type: 'Canje', amount: '-120.00', date: 'Ayer, 04:15 PM', icon: 'cart', color: '#F44336' },
-  { id: '3', type: 'Ingreso', amount: '+100.00', date: '08 Mar, 09:00 AM', icon: 'trending-up', color: '#4CAF50' },
-];
+interface Transaction {
+  id: number;
+  tipo: 'deposito' | 'canje';
+  monto_total: number;
+  fecha: string;
+}
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const [balance, setBalance] = useState<number>(0);
+  const [profileName, setProfileName] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [recentMovements, setRecentMovements] = useState<Transaction[]>([]);
 
-  const renderMovement = (item: typeof RECENTS[0]) => (
-    <View key={item.id} style={styles.movementCard}>
-      <View style={[styles.iconContainer, { backgroundColor: item.color + '10' }]}>
-        <Ionicons name={item.icon as any} size={22} color={item.color} />
+  const fetchProfileData = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Fetch profile and balance
+      const { data: profile, error: profileError } = await supabase
+        .from('perfiles')
+        .select('nombre, saldo_actual')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setBalance(profile.saldo_actual);
+        setProfileName(profile.nombre);
+      }
+      if (profileError) console.error('Error fetching profile balance:', profileError);
+
+      // Fetch last 3 transactions
+      const { data: transactions, error: transError } = await supabase
+        .from('transacciones')
+        .select('id, tipo, monto_total, fecha')
+        .eq('perfil_id', user.id)
+        .order('fecha', { ascending: false })
+        .limit(3);
+
+      if (transactions) {
+        setRecentMovements(transactions);
+      }
+      if (transError) console.error('Error fetching transactions:', transError);
+
+    } catch (err) {
+      console.error('Error in fetchProfileData:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchProfileData();
+    setRefreshing(false);
+  }, [fetchProfileData]);
+
+  const getMovementStyle = (tipo: string) => {
+    return tipo === 'deposito' 
+      ? { icon: 'trending-up', color: '#4CAF50', label: 'Depósito', prefix: '+' }
+      : { icon: 'cart', color: '#F44336', label: 'Canje', prefix: '-' };
+  };
+
+  const renderMovement = (item: Transaction) => {
+    const style = getMovementStyle(item.tipo);
+    const date = new Date(item.fecha);
+    const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ', ' + 
+                    date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+    return (
+      <View key={item.id} style={styles.movementCard}>
+        <View style={[styles.iconContainer, { backgroundColor: style.color + '10' }]}>
+          <Ionicons name={style.icon as any} size={22} color={style.color} />
+        </View>
+        <View style={styles.movementInfo}>
+          <ThemedText style={styles.movementTypeText}>{style.label}</ThemedText>
+          <ThemedText style={styles.movementDateText}>{dateStr}</ThemedText>
+        </View>
+        <ThemedText style={[styles.movementAmountText, { color: style.color }]}>
+          {style.prefix}{item.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+        </ThemedText>
       </View>
-      <View style={styles.movementInfo}>
-        <ThemedText style={styles.movementTypeText}>{item.type}</ThemedText>
-        <ThemedText style={styles.movementDateText}>{item.date}</ThemedText>
-      </View>
-      <ThemedText style={[styles.movementAmountText, { color: item.color }]}>
-        {item.amount}
-      </ThemedText>
-    </View>
-  );
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
         <ThemedText style={styles.title}>DisproMovil</ThemedText>
         <View style={styles.headerTop}>
-          <ThemedText style={styles.welcomeTitle}>Hola, Usuario 👋</ThemedText>
+          <ThemedText style={styles.welcomeTitle}>Hola, {profileName || 'Usuario'} 👋</ThemedText>
           <TouchableOpacity
             onPress={() => signOut()}
             style={styles.logoutBtn}
@@ -54,12 +119,20 @@ export default function HomeScreen() {
             style={styles.balanceGradient}
           >
             <ThemedText style={styles.balanceLabel}>Saldo Disponible</ThemedText>
-            <ThemedText style={styles.balanceValue}>$1,280.00</ThemedText>
+            <ThemedText style={styles.balanceValue}>
+              ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </ThemedText>
           </LinearGradient>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1a237e']} />
+        }
+      >
         <TouchableOpacity
           style={styles.actionCard}
           onPress={() => router.push('/qr-redeem')}
@@ -89,7 +162,14 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.movementsContainer}>
-          {RECENTS.map(renderMovement)}
+          {recentMovements.length > 0 ? (
+            recentMovements.map(renderMovement)
+          ) : (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="receipt-outline" size={48} color="#ccc" />
+              <ThemedText style={styles.emptyStateText}>No tienes transacciones en este momento</ThemedText>
+            </View>
+          )}
         </View>
       </ScrollView>
     </ThemedView>
@@ -259,5 +339,16 @@ const styles = StyleSheet.create({
   movementAmountText: {
     fontSize: 17,
     fontWeight: '700',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyStateText: {
+    color: '#999',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

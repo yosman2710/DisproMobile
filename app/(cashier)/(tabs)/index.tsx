@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function CashierScannerScreen() {
     const router = useRouter();
-    const { signOut } = useAuth();
+    const { signOut, user } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
     const [manualIdModal, setManualIdModal] = useState(false);
     const [manualId, setManualId] = useState('');
@@ -42,13 +42,11 @@ export default function CashierScannerScreen() {
     const handleBarCodeScanned = ({ data }: { data: string }) => {
         if (!isScanning) return;
         setIsScanning(false);
-        // In a real app we would validate data here
         router.push({
             pathname: '/(cashier)/redemption-detail',
-            params: { employeeId: data }
+            params: { tokenAuth: data }
         } as any);
 
-        // Resume scanning after a delay if they come back
         setTimeout(() => setIsScanning(true), 2000);
     };
 
@@ -57,7 +55,7 @@ export default function CashierScannerScreen() {
         setManualIdModal(false);
         router.push({
             pathname: '/(cashier)/redemption-detail',
-            params: { employeeId: manualId }
+            params: { tokenAuth: manualId }
         } as any);
         setManualId('');
     };
@@ -68,7 +66,8 @@ export default function CashierScannerScreen() {
                 <View style={styles.headerTop}>
                     <View>
                         <ThemedText style={styles.title}>DisproMovil</ThemedText>
-                        <ThemedText style={styles.roleSub}>Panel de Caja 💰</ThemedText>
+                        <ThemedText style={styles.roleSub}>Hola, {user?.user_metadata.nombre} 👋</ThemedText>
+                        <ThemedText style={styles.roleSub}>Bienvenido al Panel de Caja 💰</ThemedText>
                     </View>
                     <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
                         <Ionicons name="log-out-outline" size={22} color="#F44336" />
@@ -84,24 +83,23 @@ export default function CashierScannerScreen() {
                     barcodeScannerSettings={{
                         barcodeTypes: ['qr'],
                     }}
-                >
-                    <View style={styles.overlay}>
+                />
+                <View style={styles.overlay}>
+                    <View style={styles.unfocusedContainer} />
+                    <View style={styles.middleContainer}>
                         <View style={styles.unfocusedContainer} />
-                        <View style={styles.middleContainer}>
-                            <View style={styles.unfocusedContainer} />
-                            <View style={styles.focusedContainer}>
-                                <View style={styles.cornerTopLeft} />
-                                <View style={styles.cornerTopRight} />
-                                <View style={styles.cornerBottomLeft} />
-                                <View style={styles.cornerBottomRight} />
-                            </View>
-                            <View style={styles.unfocusedContainer} />
+                        <View style={styles.focusedContainer}>
+                            <View style={styles.cornerTopLeft} />
+                            <View style={styles.cornerTopRight} />
+                            <View style={styles.cornerBottomLeft} />
+                            <View style={styles.cornerBottomRight} />
                         </View>
-                        <View style={styles.unfocusedContainer}>
-                            <ThemedText style={styles.scanText}>Alinea el código QR dentro del recuadro</ThemedText>
-                        </View>
+                        <View style={styles.unfocusedContainer} />
                     </View>
-                </CameraView>
+                    <View style={styles.unfocusedContainer}>
+                        <ThemedText style={styles.scanText}>Alinea el código QR dentro del recuadro</ThemedText>
+                    </View>
+                </View>
             </View>
 
             <View style={styles.footer}>
@@ -207,7 +205,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     overlay: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.5)',
     },
     unfocusedContainer: {

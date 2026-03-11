@@ -1,40 +1,107 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
-const CATALOG = [
-    { id: '1', name: 'Almuerzo Ejecutivo', cost: 10.00, category: 'Comida' },
-    { id: '2', name: 'Bono Combustible', cost: 20.00, category: 'Transporte' },
-    { id: '3', name: 'Seguro Dental', cost: 15.00, category: 'Salud' },
-    { id: '4', name: 'Gift Card Supermercado', cost: 50.00, category: 'Compras' },
-];
+interface Benefit {
+    id: number;
+    nombre: string;
+    costo_moneda: number;
+    stock: number;
+}
 
 export default function RedemptionDetailScreen() {
     const router = useRouter();
-    const { employeeId } = useLocalSearchParams();
+    const { user: cashier } = useAuth();
+    const { tokenAuth } = useLocalSearchParams();
+    const [loading, setLoading] = useState(true);
+    const [validating, setValidating] = useState(false);
+    const [employee, setEmployee] = useState<{ id: string, nombre: string, saldo_actual: number } | null>(null);
+    const [catalog, setCatalog] = useState<Benefit[]>([]);
     const [search, setSearch] = useState('');
-    const [selectedItems, setSelectedItems] = useState<{ id: string, name: string, cost: number, qty: number }[]>([]);
+    const [selectedItems, setSelectedItems] = useState<{ id: number, name: string, cost: number, qty: number }[]>([]);
     const [confirmModal, setConfirmModal] = useState(false);
 
-    const filteredCatalog = CATALOG.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase())
+    const fetchData = useCallback(async () => {
+        if (!tokenAuth) return;
+        
+        setLoading(true);
+        try {
+            const { data: tokenData, error: tokenError } = await supabase
+                .from('qr_tokens')
+                .select(`
+                    usado,
+                    expira_at,
+                    perfil:perfil_id(id, nombre, saldo_actual)
+                `)
+                .eq('token_auth', tokenAuth)
+                .single();
+
+            if (tokenError || !tokenData) {
+                Alert.alert('Error', 'Código QR no reconocido o inexistente.');
+                router.back();
+                return;
+            }
+
+            const now = new Date();
+            const expiry = new Date(tokenData.expira_at);
+
+            if (tokenData.usado) {
+                Alert.alert('Código Inválido', 'Este código ya ha sido utilizado.');
+                router.back();
+                return;
+            }
+
+            if (expiry < now) {
+                Alert.alert('Código Expirado', 'Este código ha expirado. El empleado debe generar uno nuevo.');
+                router.back();
+                return;
+            }
+
+            setEmployee(tokenData.perfil as any);
+
+            const { data: benefits, error: benefitsError } = await supabase
+                .from('beneficios')
+                .select('*')
+                .gt('stock', 0)
+                .order('nombre');
+
+            if (benefits) setCatalog(benefits);
+            if (benefitsError) console.error('Error fetching catalog:', benefitsError);
+
+        } catch (err) {
+            console.error('Critical error in fetchData:', err);
+            Alert.alert('Error', 'Hubo un problema al validar el código.');
+            router.back();
+        } finally {
+            setLoading(false);
+        }
+    }, [tokenAuth]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const filteredCatalog = catalog.filter(item =>
+        item.nombre.toLowerCase().includes(search.toLowerCase())
     );
 
-    const addItem = (item: typeof CATALOG[0]) => {
+    const addItem = (item: Benefit) => {
         setSelectedItems(prev => {
             const existing = prev.find(i => i.id === item.id);
             if (existing) {
                 return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
             }
-            return [...prev, { ...item, qty: 1 }];
+            return [...prev, { id: item.id, name: item.nombre, cost: item.costo_moneda, qty: 1 }];
         });
     };
 
-    const removeItem = (id: string) => {
+    const removeItem = (id: number) => {
         setSelectedItems(prev => {
             const existing = prev.find(i => i.id === id);
             if (existing && existing.qty > 1) {
@@ -45,19 +112,54 @@ export default function RedemptionDetailScreen() {
     };
 
     const total = selectedItems.reduce((acc, item) => acc + (item.cost * item.qty), 0);
-    const employeeBalance = 120.00; // Mock balance
+    const employeeBalance = employee?.saldo_actual || 0;
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
+        if (!employee || !cashier || !tokenAuth) return;
+        
         if (total > employeeBalance) {
             Alert.alert('Saldo Insuficiente', 'El empleado no tiene suficiente saldo para este canje.');
             return;
         }
-        setConfirmModal(false);
-        router.replace({
-            pathname: '/(cashier)/success',
-            params: { total: total.toFixed(2), employeeName: 'Juan Pérez' }
-        } as any);
+
+        setValidating(true);
+        try {
+            const { error } = await supabase.rpc('realizar_canje_seguro', {
+                p_token: tokenAuth,
+                p_cajero_id: cashier.id,
+                p_monto_total: total,
+                p_motivo: `Canje de ${selectedItems.length} beneficios`
+            });
+
+            if (error) throw error;
+
+            setConfirmModal(false);
+            router.replace({
+                pathname: '/(cashier)/success',
+                params: { 
+                    total: total.toFixed(2), 
+                    employeeName: employee.nombre,
+                    newBalance: (employee.saldo_actual - total).toFixed(2),
+                    timestamp: new Date().toISOString()
+                }
+            });
+
+        } catch (err: any) {
+            console.error('Error processing redemption:', err);
+            Alert.alert('Error', err.message || 'No se pudo procesar el canje.');
+        } finally {
+            setValidating(false);
+        }
     };
+
+    if (loading) {
+        return (
+            <ThemedView style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color="#1a237e" />
+                <ThemedText style={{ marginTop: 20 }}>Validando Token...</ThemedText>
+            </ThemedView>
+        );
+    }
 
     return (
         <ThemedView style={styles.container}>
@@ -69,26 +171,24 @@ export default function RedemptionDetailScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                {/* Profile Card */}
                 <View style={styles.profileCard}>
                     <View style={styles.profileMain}>
                         <View style={styles.avatarContainer}>
                             <Ionicons name="person" size={40} color="#1a237e" />
                         </View>
                         <View>
-                            <ThemedText style={styles.employeeName}>Juan Pérez</ThemedText>
-                            <ThemedText style={styles.employeeDept}>Depto. Logística • {employeeId}</ThemedText>
+                            <ThemedText style={styles.employeeName}>{employee?.nombre || 'Empleado'}</ThemedText>
+                            <ThemedText style={styles.employeeDept}>Saldo Disponible para Canje</ThemedText>
                         </View>
                     </View>
                     <View style={styles.balanceRow}>
-                        <ThemedText style={styles.balanceLabel}>Saldo Disponible</ThemedText>
-                        <ThemedText style={styles.balanceValue}>${employeeBalance.toFixed(2)}</ThemedText>
+                        <ThemedText style={styles.balanceLabel}>Saldo Actual</ThemedText>
+                        <ThemedText style={styles.balanceValue}>${employeeBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</ThemedText>
                     </View>
                 </View>
 
-                {/* Catalog Section */}
                 <View style={styles.section}>
-                    <ThemedText style={styles.sectionTitle}>Catálogo de Beneficios</ThemedText>
+                    <ThemedText style={styles.sectionTitle}>Catálogo de Beneficios DISPRO</ThemedText>
                     <View style={styles.searchBox}>
                         <Ionicons name="search" size={20} color="#888" />
                         <TextInput
@@ -103,16 +203,15 @@ export default function RedemptionDetailScreen() {
                         {filteredCatalog.map(item => (
                             <TouchableOpacity key={item.id} style={styles.catalogItem} onPress={() => addItem(item)}>
                                 <View style={styles.itemMain}>
-                                    <ThemedText style={styles.itemName}>{item.name}</ThemedText>
-                                    <ThemedText style={styles.itemCategory}>{item.category}</ThemedText>
+                                    <ThemedText style={styles.itemName}>{item.nombre}</ThemedText>
+                                    <ThemedText style={styles.itemCategory}>Stock: {item.stock}</ThemedText>
                                 </View>
-                                <ThemedText style={styles.itemCost}>${item.cost}</ThemedText>
+                                <ThemedText style={styles.itemCost}>${item.costo_moneda.toLocaleString('en-US', { minimumFractionDigits: 0 })}</ThemedText>
                             </TouchableOpacity>
                         ))}
                     </View>
                 </View>
 
-                {/* Summary (Nota de Venta) */}
                 {selectedItems.length > 0 && (
                     <View style={styles.summaryCard}>
                         <ThemedText style={styles.summaryTitle}>Resumen de Canje</ThemedText>
@@ -120,7 +219,7 @@ export default function RedemptionDetailScreen() {
                             <View key={item.id} style={styles.summaryRow}>
                                 <ThemedText style={styles.sumQty}>{item.qty}x</ThemedText>
                                 <ThemedText style={styles.sumName}>{item.name}</ThemedText>
-                                <ThemedText style={styles.sumTotal}>${(item.cost * item.qty).toFixed(2)}</ThemedText>
+                                <ThemedText style={styles.sumTotal}>${(Number(item.cost) * Number(item.qty)).toFixed(2)}</ThemedText>
                                 <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.removeBtn}>
                                     <Ionicons name="close-circle" size={20} color="#F44336" />
                                 </TouchableOpacity>
@@ -135,7 +234,6 @@ export default function RedemptionDetailScreen() {
                 )}
             </ScrollView>
 
-            {/* Primary Action */}
             <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.confirmActionBtn, total === 0 && styles.disabledBtn]}
@@ -154,17 +252,21 @@ export default function RedemptionDetailScreen() {
                         </View>
                         <ThemedText style={styles.modalTitle}>¿Confirmar Transacción?</ThemedText>
                         <ThemedText style={styles.modalSub}>
-                            Se descontarán <ThemedText style={{ fontWeight: '800' }}>${total.toFixed(2)}</ThemedText> de la cuenta de Juan Pérez.
+                            Se descontarán <ThemedText style={{ fontWeight: '800' }}>${total.toFixed(2)}</ThemedText> de la cuenta de {employee?.nombre}.
                         </ThemedText>
 
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setConfirmModal(false)}>
-                                <ThemedText style={styles.cancelBtnText}>Volver</ThemedText>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.modalBtn, styles.confirmBtn]} onPress={handleConfirm}>
-                                <ThemedText style={styles.confirmBtnText}>Sí, Confirmar</ThemedText>
-                            </TouchableOpacity>
-                        </View>
+                        {validating ? (
+                            <ActivityIndicator size="large" color="#1a237e" />
+                        ) : (
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setConfirmModal(false)}>
+                                    <ThemedText style={styles.cancelBtnText}>Volver</ThemedText>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.modalBtn, styles.confirmBtn]} onPress={handleConfirm}>
+                                    <ThemedText style={styles.confirmBtnText}>Sí, Confirmar</ThemedText>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -174,6 +276,7 @@ export default function RedemptionDetailScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#ffffff' },
+    center: { justifyContent: 'center', alignItems: 'center' },
     header: {
         paddingTop: 60,
         paddingHorizontal: 24,

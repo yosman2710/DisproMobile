@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(employee)',
 };
 
@@ -19,41 +18,25 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('Redirection check:', { 
-      hasSession: !!session, 
-      userRole, 
-      isLoading, 
-      segments 
-    });
-
     if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-    const inEmployeeGroup = segments[0] === '(employee)';
-    const inCashierGroup = segments[0] === '(cashier)';
 
     if (!session) {
       if (segments[0] !== '(auth)') {
-        console.log('No session, redirecting to login');
         router.replace('/(auth)/login');
       }
       return;
     }
 
-    // Authenticated
     if (!userRole) {
-      console.log('Session exists but role is still loading...');
       return;
     }
 
     const targetGroup = userRole === 'cajero' ? '(cashier)' : '(employee)';
     const targetPath = userRole === 'cajero' ? '/(cashier)' : '/(employee)';
 
-    // Lista de rutas que están fuera de los grupos de rol y deben permitirse
     const isGlobalScreen = segments[0] === 'qr-redeem' || segments[0] === 'modal';
 
     if (segments[0] !== targetGroup && !isGlobalScreen) {
-      console.log(`In segment ${segments[0] || 'root'}, redirecting to ${targetPath}`);
       router.replace(targetPath as any);
     }
   }, [session, userRole, isLoading, segments]);
