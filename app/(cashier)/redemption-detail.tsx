@@ -14,6 +14,7 @@ export default function RedemptionDetailScreen() {
     const { tokenAuth } = useLocalSearchParams();
     const [loading, setLoading] = useState(true);
     const [validating, setValidating] = useState(false);
+    const [resolvedToken, setResolvedToken] = useState<string | null>(null);
     const [employee, setEmployee] = useState<{ id: string, nombre: string, saldo_actual: number } | null>(null);
     const [amount, setAmount] = useState('');
     const [reason, setReason] = useState('');
@@ -24,18 +25,28 @@ export default function RedemptionDetailScreen() {
         
         setLoading(true);
         try {
-            const { data: tokenData, error: tokenError } = await supabase
+            // Decidir si buscar por UUID (QR) o por Código Corto (Ingreso manual)
+            const isUUID = tokenAuth?.toString().length === 36;
+            
+            let query = supabase
                 .from('qr_tokens')
                 .select(`
+                    token_auth,
                     usado,
                     expira_at,
                     perfil:perfil_id(id, nombre, saldo_actual)
-                `)
-                .eq('token_auth', tokenAuth)
-                .single();
+                `);
+            
+            if (isUUID) {
+                query = query.eq('token_auth', tokenAuth);
+            } else {
+                query = query.eq('codigo_corto', tokenAuth);
+            }
+
+            const { data: tokenData, error: tokenError } = await query.single();
 
             if (tokenError || !tokenData) {
-                Alert.alert('Error', 'Código QR no reconocido o inexistente.');
+                Alert.alert('Error', 'Código no reconocido o inexistente.');
                 router.back();
                 return;
             }
@@ -55,6 +66,7 @@ export default function RedemptionDetailScreen() {
                 return;
             }
 
+            setResolvedToken(tokenData.token_auth);
             setEmployee(tokenData.perfil as any);
 
         } catch (err) {
@@ -74,7 +86,7 @@ export default function RedemptionDetailScreen() {
     const employeeBalance = employee?.saldo_actual || 0;
 
     const handleConfirm = async () => {
-        if (!employee || !cashier || !tokenAuth) return;
+        if (!employee || !cashier || !resolvedToken) return;
         
         if (total <= 0) {
             Alert.alert('Monto Inválido', 'Por favor ingrese un monto mayor a cero.');
@@ -89,7 +101,7 @@ export default function RedemptionDetailScreen() {
         setValidating(true);
         try {
             const { error } = await supabase.rpc('realizar_canje_seguro', {
-                p_token: tokenAuth,
+                p_token: resolvedToken,
                 p_cajero_id: cashier.id,
                 p_monto_total: total,
                 p_motivo: reason || 'Deducción de saldo directa'
