@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -39,7 +39,7 @@ export default function CashierScannerScreen() {
         );
     }
 
-    const handleBarCodeScanned = ({ data }: { data: string }) => {
+    const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
         if (!isScanning) return;
         setIsScanning(false);
         router.push({
@@ -48,9 +48,9 @@ export default function CashierScannerScreen() {
         } as any);
 
         setTimeout(() => setIsScanning(true), 2000);
-    };
+    }, [isScanning, router]);
 
-    const handleManualEntry = () => {
+    const handleManualEntry = useCallback(() => {
         if (!manualId) return;
         setManualIdModal(false);
         router.push({
@@ -58,7 +58,7 @@ export default function CashierScannerScreen() {
             params: { tokenAuth: manualId }
         } as any);
         setManualId('');
-    };
+    }, [manualId, router]);
 
     return (
         <ThemedView style={styles.container}>
@@ -113,7 +113,7 @@ export default function CashierScannerScreen() {
 
                 <TouchableOpacity
                     style={styles.historyBtn}
-                    onPress={() => router.push('/(cashier)/history')}
+                    onPress={() => router.push('/(cashier)/history' as any)}
                 >
                     <Ionicons name="time-outline" size={24} color="#666" />
                     <ThemedText style={styles.historyBtnText}>Turno Actual</ThemedText>

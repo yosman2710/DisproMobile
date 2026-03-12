@@ -7,15 +7,21 @@ import { ThemedView } from '@/components/themed-view';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
-interface Transaction {
-    id: number;
-    monto_total: number;
-    fecha: string;
-    tipo: string;
-    perfil: {
-        nombre: string;
-    } | null;
-}
+import { Transaction } from '@/types/database';
+import { formatDate, formatTime, formatCurrency } from '@/utils/format';
+
+const TransactionCard = React.memo(({ item }: { item: Transaction }) => (
+    <View style={styles.card}>
+        <View style={[styles.iconBox, { backgroundColor: '#4CAF5010' }]}>
+            <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
+        </View>
+        <View style={styles.cardInfo}>
+            <ThemedText style={styles.userName}>{item.perfil?.nombre || 'Empleado'}</ThemedText>
+            <ThemedText style={styles.dateText}>{formatDate(item.fecha)} • {formatTime(item.fecha)}</ThemedText>
+        </View>
+        <ThemedText style={styles.amountText}>{formatCurrency(item.monto_total)}</ThemedText>
+    </View>
+));
 
 export default function CashierHistoryScreen() {
     const { user } = useAuth();
@@ -41,7 +47,6 @@ export default function CashierHistoryScreen() {
 
             if (error) throw error;
             
-            // Map the data to handle the join result correctly (dealing with array returns if necessary)
             const mappedData: Transaction[] = (data || []).map((item: any) => ({
                 ...item,
                 perfil: Array.isArray(item.perfil) ? item.perfil[0] : item.perfil
@@ -54,39 +59,20 @@ export default function CashierHistoryScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [user]);
+    }, [user.id]);
 
     useEffect(() => {
         fetchHistory();
     }, [fetchHistory]);
 
-    const onRefresh = () => {
+    const onRefresh = useCallback(() => {
         setRefreshing(true);
         fetchHistory();
-    };
+    }, [fetchHistory]);
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-    };
-
-    const formatTime = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    };
-
-    const renderItem = ({ item }: { item: Transaction }) => (
-        <View style={styles.card}>
-            <View style={[styles.iconBox, { backgroundColor: '#4CAF5010' }]}>
-                <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
-            </View>
-            <View style={styles.cardInfo}>
-                <ThemedText style={styles.userName}>{item.perfil?.nombre || 'Empleado'}</ThemedText>
-                <ThemedText style={styles.dateText}>{formatDate(item.fecha)} • {formatTime(item.fecha)}</ThemedText>
-            </View>
-            <ThemedText style={styles.amountText}>${Number(item.monto_total).toFixed(2)}</ThemedText>
-        </View>
-    );
+    const renderItem = useCallback(({ item }: { item: Transaction }) => (
+        <TransactionCard item={item} />
+    ), []);
 
     return (
         <ThemedView style={styles.container}>

@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabase';
 const { width } = Dimensions.get('window');
 const TOKEN_EXPIRY_MINUTES = 5;
 
+import { QRToken } from '@/types/database';
+
 export default function QRRedeemScreen() {
     const router = useRouter();
     const { user } = useAuth();
@@ -20,7 +22,7 @@ export default function QRRedeemScreen() {
     const [timeLeft, setTimeLeft] = useState<number>(0);
 
     const generateToken = useCallback(async () => {
-        if (!user) return;
+        if (!user?.id) return;
         
         setLoading(true);
         try {
@@ -47,7 +49,7 @@ export default function QRRedeemScreen() {
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [user?.id]);
 
     useEffect(() => {
         generateToken();
@@ -55,10 +57,10 @@ export default function QRRedeemScreen() {
 
     // Timer logic
     useEffect(() => {
-        if (timeLeft <= 0 || loading) {
-            if (timeLeft === 0 && token) {
-                generateToken(); // Refresh if expired
-            }
+        if (loading || !token) return;
+
+        if (timeLeft <= 0) {
+            generateToken(); // Refresh if expired
             return;
         }
 
