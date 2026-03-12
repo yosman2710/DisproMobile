@@ -46,7 +46,6 @@ export default function TabLayout() {
           let ionIcon: any = 'help-circle';
           if (route.name === 'index') ionIcon = 'home';
           else if (route.name === 'explore') ionIcon = 'time';
-          else if (route.name === 'benefits') ionIcon = 'gift';
 
           return <Ionicons name={focused ? (ionIcon as any) : (`${ionIcon}-outline` as any)} size={22} color={color} />;
         },
@@ -62,12 +61,6 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: 'Historial',
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="benefits"
-        options={{
-          title: 'Beneficios',
         }}
       />
     </MaterialTopTabs>

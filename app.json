@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "dispromovil",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -18,8 +17,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.yosman2710.DisproMovil"
     },
     "web": {
       "output": "static",
@@ -44,6 +43,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1ce21c70-0a24-40fa-ad31-8ad57ffc64c6"
+      }
     }
   }
 }

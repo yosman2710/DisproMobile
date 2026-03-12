@@ -8,13 +8,6 @@ import { ThemedView } from '@/components/themed-view';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
-interface Benefit {
-    id: number;
-    nombre: string;
-    costo_moneda: number;
-    stock: number;
-}
-
 export default function RedemptionDetailScreen() {
     const router = useRouter();
     const { user: cashier } = useAuth();
@@ -22,9 +15,8 @@ export default function RedemptionDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [validating, setValidating] = useState(false);
     const [employee, setEmployee] = useState<{ id: string, nombre: string, saldo_actual: number } | null>(null);
-    const [catalog, setCatalog] = useState<Benefit[]>([]);
-    const [search, setSearch] = useState('');
-    const [selectedItems, setSelectedItems] = useState<{ id: number, name: string, cost: number, qty: number }[]>([]);
+    const [amount, setAmount] = useState('');
+    const [reason, setReason] = useState('');
     const [confirmModal, setConfirmModal] = useState(false);
 
     const fetchData = useCallback(async () => {
@@ -65,15 +57,6 @@ export default function RedemptionDetailScreen() {
 
             setEmployee(tokenData.perfil as any);
 
-            const { data: benefits, error: benefitsError } = await supabase
-                .from('beneficios')
-                .select('*')
-                .gt('stock', 0)
-                .order('nombre');
-
-            if (benefits) setCatalog(benefits);
-            if (benefitsError) console.error('Error fetching catalog:', benefitsError);
-
         } catch (err) {
             console.error('Critical error in fetchData:', err);
             Alert.alert('Error', 'Hubo un problema al validar el código.');
@@ -87,38 +70,19 @@ export default function RedemptionDetailScreen() {
         fetchData();
     }, [fetchData]);
 
-    const filteredCatalog = catalog.filter(item =>
-        item.nombre.toLowerCase().includes(search.toLowerCase())
-    );
-
-    const addItem = (item: Benefit) => {
-        setSelectedItems(prev => {
-            const existing = prev.find(i => i.id === item.id);
-            if (existing) {
-                return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
-            }
-            return [...prev, { id: item.id, name: item.nombre, cost: item.costo_moneda, qty: 1 }];
-        });
-    };
-
-    const removeItem = (id: number) => {
-        setSelectedItems(prev => {
-            const existing = prev.find(i => i.id === id);
-            if (existing && existing.qty > 1) {
-                return prev.map(i => i.id === id ? { ...i, qty: i.qty - 1 } : i);
-            }
-            return prev.filter(i => i.id !== id);
-        });
-    };
-
-    const total = selectedItems.reduce((acc, item) => acc + (item.cost * item.qty), 0);
+    const total = parseFloat(amount) || 0;
     const employeeBalance = employee?.saldo_actual || 0;
 
     const handleConfirm = async () => {
         if (!employee || !cashier || !tokenAuth) return;
         
+        if (total <= 0) {
+            Alert.alert('Monto Inválido', 'Por favor ingrese un monto mayor a cero.');
+            return;
+        }
+
         if (total > employeeBalance) {
-            Alert.alert('Saldo Insuficiente', 'El empleado no tiene suficiente saldo para este canje.');
+            Alert.alert('Saldo Insuficiente', 'El empleado no tiene suficiente saldo para esta transacción.');
             return;
         }
 
@@ -128,7 +92,7 @@ export default function RedemptionDetailScreen() {
                 p_token: tokenAuth,
                 p_cajero_id: cashier.id,
                 p_monto_total: total,
-                p_motivo: `Canje de ${selectedItems.length} beneficios`
+                p_motivo: reason || 'Deducción de saldo directa'
             });
 
             if (error) throw error;
@@ -146,7 +110,7 @@ export default function RedemptionDetailScreen() {
 
         } catch (err: any) {
             console.error('Error processing redemption:', err);
-            Alert.alert('Error', err.message || 'No se pudo procesar el canje.');
+            Alert.alert('Error', err.message || 'No se pudo procesar la transacción.');
         } finally {
             setValidating(false);
         }
@@ -167,7 +131,7 @@ export default function RedemptionDetailScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#1a237e" />
                 </TouchableOpacity>
-                <ThemedText style={styles.headerTitle}>Detalle de Canje</ThemedText>
+                <ThemedText style={styles.headerTitle}>Procesar Transacción</ThemedText>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -178,7 +142,7 @@ export default function RedemptionDetailScreen() {
                         </View>
                         <View>
                             <ThemedText style={styles.employeeName}>{employee?.nombre || 'Empleado'}</ThemedText>
-                            <ThemedText style={styles.employeeDept}>Saldo Disponible para Canje</ThemedText>
+                            <ThemedText style={styles.employeeDept}>Saldo Disponible</ThemedText>
                         </View>
                     </View>
                     <View style={styles.balanceRow}>
@@ -188,47 +152,47 @@ export default function RedemptionDetailScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <ThemedText style={styles.sectionTitle}>Catálogo de Beneficios DISPRO</ThemedText>
-                    <View style={styles.searchBox}>
-                        <Ionicons name="search" size={20} color="#888" />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Buscar beneficio..."
-                            value={search}
-                            onChangeText={setSearch}
-                        />
+                    <ThemedText style={styles.sectionTitle}>Detalles de la Transacción</ThemedText>
+                    
+                    <View style={styles.inputContainer}>
+                        <ThemedText style={styles.inputLabel}>Monto a Descontar ($)</ThemedText>
+                        <View style={styles.amountInputBox}>
+                            <Ionicons name="cash-outline" size={24} color="#1a237e" />
+                            <TextInput
+                                style={styles.amountInput}
+                                placeholder="0.00"
+                                keyboardType="numeric"
+                                value={amount}
+                                onChangeText={setAmount}
+                            />
+                        </View>
                     </View>
 
-                    <View style={styles.catalogList}>
-                        {filteredCatalog.map(item => (
-                            <TouchableOpacity key={item.id} style={styles.catalogItem} onPress={() => addItem(item)}>
-                                <View style={styles.itemMain}>
-                                    <ThemedText style={styles.itemName}>{item.nombre}</ThemedText>
-                                    <ThemedText style={styles.itemCategory}>Stock: {item.stock}</ThemedText>
-                                </View>
-                                <ThemedText style={styles.itemCost}>${item.costo_moneda.toLocaleString('en-US', { minimumFractionDigits: 0 })}</ThemedText>
-                            </TouchableOpacity>
-                        ))}
+                    <View style={styles.inputContainer}>
+                        <ThemedText style={styles.inputLabel}>Concepto / Motivo (Opcional)</ThemedText>
+                        <View style={styles.reasonInputBox}>
+                            <TextInput
+                                style={styles.reasonInput}
+                                placeholder="Ej: Pago de almuerzo, Vale, etc."
+                                value={reason}
+                                onChangeText={setReason}
+                                multiline
+                            />
+                        </View>
                     </View>
                 </View>
 
-                {selectedItems.length > 0 && (
+                {total > 0 && (
                     <View style={styles.summaryCard}>
-                        <ThemedText style={styles.summaryTitle}>Resumen de Canje</ThemedText>
-                        {selectedItems.map(item => (
-                            <View key={item.id} style={styles.summaryRow}>
-                                <ThemedText style={styles.sumQty}>{item.qty}x</ThemedText>
-                                <ThemedText style={styles.sumName}>{item.name}</ThemedText>
-                                <ThemedText style={styles.sumTotal}>${(Number(item.cost) * Number(item.qty)).toFixed(2)}</ThemedText>
-                                <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.removeBtn}>
-                                    <Ionicons name="close-circle" size={20} color="#F44336" />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                        <View style={styles.divider} />
+                        <ThemedText style={styles.summaryTitle}>Resumen</ThemedText>
                         <View style={styles.totalRow}>
                             <ThemedText style={styles.totalLabel}>TOTAL A DESCONTAR</ThemedText>
                             <ThemedText style={styles.totalValue}>${total.toFixed(2)}</ThemedText>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.totalRow}>
+                            <ThemedText style={styles.subLabel}>Saldo después del cobro</ThemedText>
+                            <ThemedText style={styles.subValue}>${(employeeBalance - total).toFixed(2)}</ThemedText>
                         </View>
                     </View>
                 )}
@@ -236,8 +200,8 @@ export default function RedemptionDetailScreen() {
 
             <View style={styles.footer}>
                 <TouchableOpacity
-                    style={[styles.confirmActionBtn, total === 0 && styles.disabledBtn]}
-                    disabled={total === 0}
+                    style={[styles.confirmActionBtn, total <= 0 && styles.disabledBtn]}
+                    disabled={total <= 0}
                     onPress={() => setConfirmModal(true)}
                 >
                     <ThemedText style={styles.confirmActionText}>Confirmar Transacción</ThemedText>
@@ -324,8 +288,10 @@ const styles = StyleSheet.create({
     balanceLabel: { color: 'white', fontSize: 14 },
     balanceValue: { color: 'white', fontSize: 20, fontWeight: '800' },
     section: { marginBottom: 24 },
-    sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a237e', marginBottom: 12 },
-    searchBox: {
+    sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a237e', marginBottom: 20 },
+    inputContainer: { marginBottom: 20 },
+    inputLabel: { fontSize: 14, fontWeight: '600', color: '#666', marginBottom: 8 },
+    amountInputBox: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#f8f9fa',
@@ -333,23 +299,16 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         borderWidth: 1,
         borderColor: '#eee',
-        marginBottom: 16,
     },
-    searchInput: { flex: 1, height: 48, marginLeft: 8, fontSize: 16 },
-    catalogList: { gap: 10 },
-    catalogItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#ffffff',
+    amountInput: { flex: 1, height: 56, marginLeft: 12, fontSize: 20, fontWeight: '700', color: '#1a237e' },
+    reasonInputBox: {
+        backgroundColor: '#f8f9fa',
+        paddingHorizontal: 16,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#f0f0f0',
+        borderColor: '#eee',
     },
-    itemName: { fontSize: 16, fontWeight: '600', color: '#1a1a1a' },
-    itemCategory: { fontSize: 12, color: '#888' },
-    itemCost: { fontSize: 16, fontWeight: '700', color: '#1a237e' },
+    reasonInput: { height: 100, fontSize: 16, color: '#1a1a1a', paddingTop: 16, textAlignVertical: 'top' },
     summaryCard: {
         backgroundColor: '#fffcf0',
         borderRadius: 20,
@@ -358,15 +317,12 @@ const styles = StyleSheet.create({
         borderColor: '#ffecdb',
     },
     summaryTitle: { fontSize: 16, fontWeight: '700', color: '#b28900', marginBottom: 16 },
-    summaryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
-    sumQty: { width: 30, fontSize: 14, fontWeight: '700', color: '#666' },
-    sumName: { flex: 1, fontSize: 14, color: '#1a1a1a' },
-    sumTotal: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
-    removeBtn: { padding: 4 },
     divider: { height: 1, backgroundColor: '#ffecdb', marginVertical: 12 },
     totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     totalLabel: { fontSize: 13, fontWeight: '800', color: '#b28900' },
     totalValue: { fontSize: 24, fontWeight: '900', color: '#1a237e' },
+    subLabel: { fontSize: 13, color: '#666' },
+    subValue: { fontSize: 15, fontWeight: '600', color: '#666' },
     footer: {
         position: 'absolute',
         bottom: 0,
@@ -397,5 +353,5 @@ const styles = StyleSheet.create({
     confirmBtn: { backgroundColor: '#1a237e' },
     cancelBtnText: { color: '#666', fontWeight: '700' },
     confirmBtnText: { color: 'white', fontWeight: '700' },
-    itemMain: { flex: 1 }
 });
+
