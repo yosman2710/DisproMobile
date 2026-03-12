@@ -5,32 +5,63 @@ CREATE TABLE public.perfiles (
   nombre TEXT NOT NULL,
   rol TEXT CHECK (rol IN ('empleado', 'cajero', 'admin')) NOT NULL,
   saldo_actual DECIMAL(12, 2) DEFAULT 0.00,
+  push_token TEXT, -- Token para notificaciones push de Expo
   fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Habilitar RLS
 ALTER TABLE public.perfiles ENABLE ROW LEVEL SECURITY;
 
--- 2. CATÁLOGO DE BENEFICIOS
-CREATE TABLE public.beneficios (
-  id SERIAL PRIMARY KEY,
-  nombre TEXT NOT NULL,
-  costo_moneda DECIMAL(10, 2) NOT NULL,
-  stock INT DEFAULT 0
-);
+-- Función auxiliar para evitar recursión infinita en las políticas de RLS
+CREATE OR REPLACE FUNCTION public.check_user_role(target_role TEXT)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.perfiles 
+    WHERE id = auth.uid() AND rol = target_role
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
 
-ALTER TABLE public.beneficios ENABLE ROW LEVEL SECURITY;
+-- Políticas para perfiles
+CREATE POLICY "Usuarios pueden ver su propio perfil" 
+  ON public.perfiles FOR SELECT 
+  USING (auth.uid() = id);
 
--- 3. QR TOKENS (Tokens de uso único)
+CREATE POLICY "Cajeros pueden ver todos los perfiles" 
+  ON public.perfiles FOR SELECT 
+  USING (public.check_user_role('cajero'));
+
+CREATE POLICY "Usuarios pueden actualizar su propio perfil" 
+  ON public.perfiles FOR UPDATE 
+  USING (auth.uid() = id);
+
+
+
+
+
+-- QR TOKENS (Tokens de uso único)
 CREATE TABLE public.qr_tokens (
   id SERIAL PRIMARY KEY,
   perfil_id UUID REFERENCES public.perfiles(id) ON DELETE CASCADE,
   token_auth UUID DEFAULT gen_random_uuid() UNIQUE,
+  codigo_corto TEXT UNIQUE, -- Para ingreso manual
   expira_at TIMESTAMP WITH TIME ZONE NOT NULL,
   usado BOOLEAN DEFAULT FALSE
 );
 
 ALTER TABLE public.qr_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para qr_tokens
+CREATE POLICY "Usuarios ven sus propios tokens" 
+  ON public.qr_tokens FOR SELECT 
+  USING (auth.uid() = perfil_id);
+
+CREATE POLICY "Cajeros ven tokens para validar" 
+  ON public.qr_tokens FOR SELECT 
+  USING ((SELECT rol FROM public.perfiles WHERE id = auth.uid()) = 'cajero');
+
+CREATE POLICY "Usuarios pueden crear sus propios tokens" 
+  ON public.qr_tokens FOR INSERT 
+  WITH CHECK (auth.uid() = perfil_id);
 
 -- 4. TRANSACCIONES
 CREATE TABLE public.transacciones (
@@ -45,16 +76,14 @@ CREATE TABLE public.transacciones (
 
 ALTER TABLE public.transacciones ENABLE ROW LEVEL SECURITY;
 
--- 5. DETALLE DEL CANJE (Para saber qué productos se llevó)
-CREATE TABLE public.detalle_transaccion (
-    id SERIAL PRIMARY KEY,
-    transaccion_id INT REFERENCES public.transacciones(id) ON DELETE CASCADE,
-    beneficio_id INT REFERENCES public.beneficios(id),
-    cantidad INT NOT NULL,
-    subtotal DECIMAL(10, 2) NOT NULL
-);
+-- Políticas para transacciones
+CREATE POLICY "Usuarios ven sus transacciones" 
+  ON public.transacciones FOR SELECT 
+  USING (auth.uid() = perfil_id OR auth.uid() = ejecutor_id);
 
-ALTER TABLE public.detalle_transaccion ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Cajeros pueden crear transacciones de canje" 
+  ON public.transacciones FOR INSERT 
+  WITH CHECK ((SELECT rol FROM public.perfiles WHERE id = auth.uid()) = 'cajero');
 
 -- Función de sincronización
 CREATE OR REPLACE FUNCTION public.handle_new_user()

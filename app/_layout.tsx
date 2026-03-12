@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export const unstable_settings = {
   initialRouteName: '(employee)',
@@ -14,6 +15,7 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { session, userRole, isLoading } = useAuth();
+  useNotifications(); // Habilitar registro de notificaciones
   const segments = useSegments();
   const router = useRouter();
 
