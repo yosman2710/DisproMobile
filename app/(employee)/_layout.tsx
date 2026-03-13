@@ -1,8 +1,9 @@
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import * as NavigationBar from 'expo-navigation-bar';
 import { withLayoutContext } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -11,6 +12,16 @@ export const MaterialTopTabs = withLayoutContext(Navigator);
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    // Ocultar la barra de navegación en Android
+    NavigationBar.setVisibilityAsync('hidden');
+
+    return () => {
+      // Restaurar la barra de navegación al salir
+      NavigationBar.setVisibilityAsync('visible');
+    };
+  }, []);
 
   return (
     <MaterialTopTabs
@@ -40,6 +51,7 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
           shadowRadius: 10,
+          paddingBottom: Platform.OS === 'android' ? 10 : 0,
         },
         tabBarPressColor: 'rgba(26, 35, 126, 0.05)',
         tabBarIcon: ({ color, focused }) => {

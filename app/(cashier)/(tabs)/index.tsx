@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -67,7 +67,7 @@ export default function CashierScannerScreen() {
                     <View>
                         <ThemedText style={styles.title}>DisproMovil</ThemedText>
                         <ThemedText style={styles.roleSub}>Hola, {user?.user_metadata.nombre} 👋</ThemedText>
-                        <ThemedText style={styles.roleSub}>Bienvenido al Panel de Caja 💰</ThemedText>
+                        
                     </View>
                     <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
                         <Ionicons name="log-out-outline" size={22} color="#F44336" />
