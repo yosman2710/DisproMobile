@@ -1,12 +1,16 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotifications } from '@/hooks/useNotifications';
+
+// Prevenir que el SplashScreen se oculte antes de tiempo
+SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   initialRouteName: '(employee)',
@@ -18,9 +22,18 @@ function RootLayoutNav() {
   useNotifications(); // Habilitar registro de notificaciones
   const segments = useSegments();
   const router = useRouter();
+  const [isNavigationReady, setIsNavigationReady] = useState(false);
 
   useEffect(() => {
-    if (isLoading) return;
+    // Cuando termine de cargar la autenticación, ocultamos la pantalla de carga
+    if (!isLoading) {
+      SplashScreen.hideAsync().catch(console.warn);
+      setIsNavigationReady(true);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (isLoading || !isNavigationReady) return;
 
     if (!session) {
       if (segments[0] !== '(auth)') {
@@ -38,10 +51,14 @@ function RootLayoutNav() {
 
     const isGlobalScreen = segments[0] === 'qr-redeem' || segments[0] === 'modal';
 
-    if (segments[0] !== targetGroup && !isGlobalScreen) {
-      router.replace(targetPath as any);
+    // Evitar loop infinito: Solo navegamos si estamos completamente en un flujo equivocado para el rol
+    if (segments[0] !== targetGroup && !isGlobalScreen && segments[0] !== '(auth)') {
+       router.replace(targetPath as any);
+    } else if (segments[0] === '(auth)') {
+       // Si el usuario intentó ir al log in mientras estaba logueado
+       router.replace(targetPath as any);
     }
-  }, [session, userRole, isLoading, segments]);
+  }, [session, userRole, isLoading, segments, isNavigationReady]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

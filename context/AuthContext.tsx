@@ -36,7 +36,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log('Auth event:', event);
             setSession(session);
             if (session) {
                 setIsLoading(true);
@@ -52,7 +51,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const fetchUserProfile = async (userId: string) => {
-        console.log('Fetching profile for:', userId);
         try {
             const { data, error } = await supabase
                 .from('perfiles')
@@ -61,7 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .maybeSingle(); // maybeSingle handles 0 rows gracefully (returns null)
 
             if (data) {
-                console.log('Profile found, role:', data.rol);
                 setUserRole(data.rol as UserRole);
             } else {
                 console.warn('No profile found in "perfiles" table for user:', userId);
