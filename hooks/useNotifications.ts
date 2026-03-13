@@ -1,31 +1,41 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import type * as NotificationsType from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
-// Configuración global del manejador de notificaciones
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Expo Go en SDK 53+ ya no soporta push notifications, arroja un error al importarlo.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: typeof NotificationsType | null = null;
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications?.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (error) {
+    console.warn('Error cargando expo-notifications', error);
+  }
+}
 
 export function useNotifications() {
   const { user } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState('');
-  const [notification, setNotification] = useState<Notifications.Notification | null>(null);
+  const [notification, setNotification] = useState<NotificationsType.Notification | null>(null);
   const notificationListener = useRef<any>(null);
   const responseListener = useRef<any>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !Notifications) return;
 
     // Ejecutar registro al iniciar
     registerForPushNotificationsAsync().then(token => {
@@ -71,6 +81,7 @@ async function saveTokenToSupabase(userId: string, token: string) {
 
 async function registerForPushNotificationsAsync() {
   let token;
+  if (!Notifications) return token;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
