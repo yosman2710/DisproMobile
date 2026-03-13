@@ -59,7 +59,7 @@ export default function CashierHistoryScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [user.id]);
+    }, [user?.id]);
 
     useEffect(() => {
         fetchHistory();

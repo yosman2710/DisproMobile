@@ -129,14 +129,16 @@ export default function CashierScannerScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <ThemedText style={styles.modalTitle}>Ingreso Manual</ThemedText>
-                        <ThemedText style={styles.modalSub}>Ingresa el ID del empleado que aparece bajo su QR.</ThemedText>
+                        <ThemedText style={styles.modalSub}>Ingresa el código de 7 dígitos que aparece bajo el QR del empleado.</ThemedText>
 
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: EMP-001"
+                            placeholder="Ej: A7B2X9P"
                             value={manualId}
                             onChangeText={setManualId}
                             autoFocus
+                            autoCapitalize="characters"
+                            maxLength={7}
                         />
 
                         <View style={styles.modalActions}>

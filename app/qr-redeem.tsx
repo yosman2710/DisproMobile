@@ -21,6 +21,17 @@ export default function QRRedeemScreen() {
     const [loading, setLoading] = useState(true);
     const [timeLeft, setTimeLeft] = useState<number>(0);
 
+    const generateShortCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 7; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    };
+
+    const [shortCode, setShortCode] = useState<string | null>(null);
+
     const generateToken = useCallback(async () => {
         if (!user?.id) return;
         
@@ -28,18 +39,21 @@ export default function QRRedeemScreen() {
         try {
             const expiryDate = new Date();
             expiryDate.setMinutes(expiryDate.getMinutes() + TOKEN_EXPIRY_MINUTES);
+            const newShortCode = generateShortCode();
 
             const { data, error } = await supabase
                 .from('qr_tokens')
                 .insert({
                     perfil_id: user.id,
                     expira_at: expiryDate.toISOString(),
+                    codigo_corto: newShortCode,
                 })
-                .select('token_auth')
+                .select('token_auth, codigo_corto')
                 .single();
 
             if (data) {
                 setToken(data.token_auth);
+                setShortCode(data.codigo_corto);
                 const diff = Math.floor((expiryDate.getTime() - new Date().getTime()) / 1000);
                 setTimeLeft(diff > 0 ? diff : 0);
             }
@@ -117,9 +131,9 @@ export default function QRRedeemScreen() {
                     </View>
 
                     <View style={styles.tokenBox}>
-                        <ThemedText style={styles.tokenLabel}>Token de Transacción:</ThemedText>
-                        <ThemedText style={styles.tokenValue} numberOfLines={1}>
-                            {loading ? 'Generando...' : token || '---'}
+                        <ThemedText style={styles.tokenLabel}>Código para Ingreso Manual:</ThemedText>
+                        <ThemedText style={styles.shortCodeValue}>
+                            {loading ? '...' : shortCode || '-------'}
                         </ThemedText>
                     </View>
 
@@ -217,11 +231,12 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginBottom: 6,
     },
-    tokenValue: {
-        fontSize: 18,
-        fontWeight: '800',
+    shortCodeValue: {
+        fontSize: 32,
+        fontWeight: '900',
         color: '#1a237e',
-        letterSpacing: 0.5,
+        letterSpacing: 4,
+        marginTop: 4,
     },
     expiryBadge: {
         flexDirection: 'row',
