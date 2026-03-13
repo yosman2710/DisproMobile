@@ -7,14 +7,15 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '@/lib/supabase';
 
 const SECURE_STORE_KEY = 'user_credentials';
 
 export default function LoginScreen() {
-    const [email, setEmail] = useState('');
+    const [cedula, setCedula] = useState('');
+    const [emailSignUp, setEmailSignUp] = useState('');
     const [password, setPassword] = useState('');
     const [nombre, setNombre] = useState('');
-    const [cedula, setCedula] = useState('');
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [selectedRole, setSelectedRole] = useState<UserRole>('empleado');
@@ -38,29 +39,48 @@ export default function LoginScreen() {
         try {
             const credentials = await SecureStore.getItemAsync(SECURE_STORE_KEY);
             if (credentials) {
-                const { email: savedEmail } = JSON.parse(credentials);
-                setEmail(savedEmail);
+                const { cedula: savedCedula } = JSON.parse(credentials);
+                setCedula(savedCedula);
             }
         } catch (error) {
             console.error('Error loading credentials:', error);
         }
     };
 
+    const getEmailByCedula = async (cedulaStr: string): Promise<string | null> => {
+        const { data, error } = await supabase.rpc('get_email_by_cedula', { p_cedula: parseInt(cedulaStr, 10) });
+        if (error || !data) {
+            console.error('Error buscando email por cédula:', error);
+            return null;
+        }
+        return data as string;
+    };
+
     const handleLogin = async () => {
-        if (!email || !password) {
-            Alert.alert('Error', 'Por favor ingresa tu correo y contraseña');
+        if (!cedula || !password) {
+            Alert.alert('Error', 'Por favor ingresa tu cédula y contraseña');
             return;
         }
         setIsLoggingIn(true);
-        console.log('Logging in with:', email, password);
+        
         try {
-            const { error } = await signIn(email, password);
-            console.log('Login result:', error);
+            // 1. Buscar el email usando la cédula
+            const userEmail = await getEmailByCedula(cedula);
+            
+            if (!userEmail) {
+                 Alert.alert('Error', 'Cédula no registrada o inválida.');
+                 setIsLoggingIn(false);
+                 return;
+            }
+
+            // 2. Iniciar sesión con el email encontrado
+            const { error } = await signIn(userEmail, password);
+            
             if (error) {
                 Alert.alert('Error de Inicio de Sesión', error.message);
             } else {
                 // Save credentials for biometric auth
-                await SecureStore.setItemAsync(SECURE_STORE_KEY, JSON.stringify({ email, password }));
+                await SecureStore.setItemAsync(SECURE_STORE_KEY, JSON.stringify({ cedula, password }));
             }
         } catch (e: any) {
             Alert.alert('Error', e.message);
@@ -70,13 +90,13 @@ export default function LoginScreen() {
     };
 
     const handleSignup = async () => {
-        if (!email || !password || !nombre || !cedula) {
+        if (!emailSignUp || !password || !nombre || !cedula) {
             Alert.alert('Error', 'Por favor completa todos los campos');
             return;
         }
         setIsLoggingIn(true);
         try {
-            const { error } = await signUp(email, password, {
+            const { error } = await signUp(emailSignUp, password, {
                 nombre,
                 cedula: parseInt(cedula),
                 rol: selectedRole
@@ -109,9 +129,17 @@ export default function LoginScreen() {
             });
 
             if (result.success) {
-                const { email: savedEmail, password: savedPassword } = JSON.parse(credentials);
+                const { cedula: savedCedula, password: savedPassword } = JSON.parse(credentials);
                 setIsLoggingIn(true);
-                const { error } = await signIn(savedEmail, savedPassword);
+                
+                const userEmail = await getEmailByCedula(savedCedula);
+                if (!userEmail) {
+                    Alert.alert('Error', 'Las credenciales guardadas ya no son válidas (Cédula no encontrada).');
+                    setIsLoggingIn(false);
+                    return;
+                }
+
+                const { error } = await signIn(userEmail, savedPassword);
                 if (error) {
                     Alert.alert('Error', 'Las credenciales guardadas ya no son válidas.');
                 }
@@ -143,43 +171,44 @@ export default function LoginScreen() {
 
                     <View style={styles.formContainer}>
                         {isSignup && (
-                            <>
-                                <View style={styles.inputWrapper}>
-                                    <ThemedText style={styles.label}>Nombre Completo</ThemedText>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="Tu nombre"
-                                        placeholderTextColor="#888"
-                                        value={nombre}
-                                        onChangeText={setNombre}
-                                    />
-                                </View>
-                                <View style={styles.inputWrapper}>
-                                    <ThemedText style={styles.label}>Cédula</ThemedText>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="123456789"
-                                        placeholderTextColor="#888"
-                                        value={cedula}
-                                        onChangeText={setCedula}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                            </>
+                            <View style={styles.inputWrapper}>
+                                <ThemedText style={styles.label}>Nombre Completo</ThemedText>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Tu nombre"
+                                    placeholderTextColor="#888"
+                                    value={nombre}
+                                    onChangeText={setNombre}
+                                />
+                            </View>
                         )}
 
                         <View style={styles.inputWrapper}>
-                            <ThemedText style={styles.label}>Correo Electrónico</ThemedText>
+                            <ThemedText style={styles.label}>Cédula</ThemedText>
                             <TextInput
                                 style={styles.input}
-                                placeholder="usuario@ejemplo.com"
+                                placeholder="123456789"
                                 placeholderTextColor="#888"
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
+                                value={cedula}
+                                onChangeText={setCedula}
+                                keyboardType="numeric"
                             />
                         </View>
+
+                        {isSignup && (
+                            <View style={styles.inputWrapper}>
+                                <ThemedText style={styles.label}>Correo Electrónico (Para recuperar clave)</ThemedText>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="usuario@ejemplo.com"
+                                    placeholderTextColor="#888"
+                                    value={emailSignUp}
+                                    onChangeText={setEmailSignUp}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                />
+                            </View>
+                        )}
 
                         <View style={styles.inputWrapper}>
                             <ThemedText style={styles.label}>Contraseña</ThemedText>
