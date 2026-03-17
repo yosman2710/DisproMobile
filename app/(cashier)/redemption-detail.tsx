@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -11,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function RedemptionDetailScreen() {
     const router = useRouter();
     const { user: cashier } = useAuth();
+    const insets = useSafeAreaInsets();
     const { tokenAuth } = useLocalSearchParams();
     const [loading, setLoading] = useState(true);
     const [validating, setValidating] = useState(false);
@@ -139,7 +141,7 @@ export default function RedemptionDetailScreen() {
 
     return (
         <ThemedView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color="#1a237e" />
                 </TouchableOpacity>

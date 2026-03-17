@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,20 +16,24 @@ interface Transaction {
   tipo: 'deposito' | 'canje';
   monto_total: number;
   fecha: string;
+  motivo?: string;
+  ejecutor?: { nombre: string };
 }
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const router = useRouter();
   const { signOut, user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [balance, setBalance] = useState<number>(0);
   const [profileName, setProfileName] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [recentMovements, setRecentMovements] = useState<Transaction[]>([]);
+  const [selectedItem, setSelectedItem] = useState<Transaction | null>(null);
 
   const fetchProfileData = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       // Fetch profile and balance
       const { data: profile, error: profileError } = await supabase
@@ -46,13 +51,17 @@ export default function HomeScreen() {
       // Fetch last 3 transactions
       const { data: transactions, error: transError } = await supabase
         .from('transacciones')
-        .select('id, tipo, monto_total, fecha')
+        .select('id, tipo, monto_total, fecha, motivo, ejecutor:ejecutor_id(nombre)')
         .eq('perfil_id', user.id)
         .order('fecha', { ascending: false })
         .limit(3);
 
       if (transactions) {
-        setRecentMovements(transactions);
+        const formatted = (transactions as any[]).map(t => ({
+          ...t,
+          ejecutor: Array.isArray(t.ejecutor) ? t.ejecutor[0] : t.ejecutor
+        }));
+        setRecentMovements(formatted);
       }
       if (transError) console.error('Error fetching transactions:', transError);
 
@@ -61,9 +70,11 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    fetchProfileData();
-  }, [fetchProfileData]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileData();
+    }, [fetchProfileData])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -72,7 +83,7 @@ export default function HomeScreen() {
   }, [fetchProfileData]);
 
   const getMovementStyle = (tipo: string) => {
-    return tipo === 'deposito' 
+    return tipo === 'deposito'
       ? { icon: 'trending-up', color: '#4CAF50', label: 'Depósito', prefix: '+' }
       : { icon: 'cart', color: '#F44336', label: 'Canje', prefix: '-' };
   };
@@ -80,11 +91,16 @@ export default function HomeScreen() {
   const renderMovement = (item: Transaction) => {
     const style = getMovementStyle(item.tipo);
     const date = new Date(item.fecha);
-    const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ', ' + 
-                    date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ', ' +
+      date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
     return (
-      <View key={item.id} style={styles.movementCard}>
+      <TouchableOpacity
+        key={item.id}
+        style={styles.movementCard}
+        onPress={() => setSelectedItem(item)}
+        activeOpacity={0.7}
+      >
         <View style={[styles.iconContainer, { backgroundColor: style.color + '10' }]}>
           <Ionicons name={style.icon as any} size={22} color={style.color} />
         </View>
@@ -95,13 +111,14 @@ export default function HomeScreen() {
         <ThemedText style={[styles.movementAmountText, { color: style.color }]}>
           {style.prefix}{item.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </ThemedText>
-      </View>
+        <Ionicons name="chevron-forward" size={16} color="#ccc" style={{ marginLeft: 8 }} />
+      </TouchableOpacity>
     );
   };
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <ThemedText style={styles.title}>DisproMovil</ThemedText>
         <View style={styles.headerTop}>
           <ThemedText style={styles.welcomeTitle}>Hola, {profileName || 'Usuario'} 👋</ThemedText>
@@ -126,8 +143,8 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#1a237e']} />
@@ -172,7 +189,78 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!selectedItem}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedItem(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <ThemedView style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalTitle}>Detalle de Transacción</ThemedText>
+              <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedItem && (() => {
+              const style = getMovementStyle(selectedItem.tipo);
+              const date = new Date(selectedItem.fecha);
+              const fullDate = date.toLocaleString('es-ES', {
+                day: '2-digit', month: 'long', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+              });
+
+              return (
+                <View style={styles.detailsList}>
+                  <DetailRow label="Tipo de Operación" value={style.label} color={style.color} />
+                  <DetailRow
+                    label="Monto total"
+                    value={`${style.prefix}${selectedItem.monto_total.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                    color={style.color}
+                    bold
+                  />
+                  <DetailRow label="Fecha y Hora" value={fullDate} />
+                  {selectedItem.motivo && <DetailRow label="Concepto/Motivo" value={selectedItem.motivo} />}
+                  <DetailRow label="Autorizado por" value={selectedItem.ejecutor?.nombre || 'Sistema'} />
+
+                  <View style={styles.modalDivider} />
+
+                  <ThemedText style={{ fontSize: 12, color: '#999', textAlign: 'center' }}>
+                    ID de transacción: {selectedItem.id}
+                  </ThemedText>
+                </View>
+              );
+            })()}
+
+            <TouchableOpacity
+              style={styles.closeModalBtn}
+              onPress={() => setSelectedItem(null)}
+            >
+              <ThemedText style={styles.closeModalBtnText}>Cerrar Detalle</ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+        </View>
+      </Modal>
     </ThemedView>
+  );
+}
+
+function DetailRow({ label, value, color, bold }: { label: string, value: string, color?: string, bold?: boolean }) {
+  return (
+    <View style={styles.detailRow}>
+      <ThemedText style={styles.detailLabel}>{label}</ThemedText>
+      <ThemedText style={[
+        styles.detailValue,
+        color ? { color } : {},
+        bold ? { fontWeight: '700', fontSize: 18 } : {}
+      ]}>
+        {value}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -226,10 +314,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   balanceValue: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: '800',
     color: '#232121ff',
   },
@@ -338,6 +426,82 @@ const styles = StyleSheet.create({
   },
   movementAmountText: {
     fontSize: 17,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingTop: 12,
+    minHeight: '45%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1a237e',
+  },
+  closeBtn: {
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+  },
+  detailsList: {
+    gap: 15,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 20,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginVertical: 10,
+  },
+  closeModalBtn: {
+    marginTop: 30,
+    backgroundColor: '#1a237e',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    elevation: 4,
+  },
+  closeModalBtnText: {
+    color: 'white',
+    fontSize: 16,
     fontWeight: '700',
   },
   emptyStateContainer: {

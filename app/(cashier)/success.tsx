@@ -2,12 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
 export default function RedemptionSuccessScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const total = params.total || '0.00';
     const employeeName = params.employeeName || 'Empleado';
@@ -27,7 +29,7 @@ export default function RedemptionSuccessScreen() {
     const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
     return (
-        <ThemedView style={styles.container}>
+        <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.content}>
                 <View style={styles.successIconBox}>
                     <Ionicons name="checkmark-done-circle" size={100} color="#4CAF50" />
@@ -87,6 +89,7 @@ export default function RedemptionSuccessScreen() {
                     <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
             </View>
+            <View style={{ height: insets.bottom }} />
         </ThemedView>
     );
 }

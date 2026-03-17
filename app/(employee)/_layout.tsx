@@ -15,11 +15,15 @@ export default function TabLayout() {
 
   useEffect(() => {
     // Ocultar la barra de navegación en Android
-    NavigationBar.setVisibilityAsync('hidden');
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden');
+    }
 
     return () => {
       // Restaurar la barra de navegación al salir
-      NavigationBar.setVisibilityAsync('visible');
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('visible');
+      }
     };
   }, []);
 

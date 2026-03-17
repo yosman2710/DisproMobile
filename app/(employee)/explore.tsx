@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useState, useCallback } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,6 +20,7 @@ interface Transaction {
 
 export default function HistoryScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('Todos');
   const [movements, setMovements] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,9 +52,11 @@ export default function HistoryScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchTransactions();
+    }, [fetchTransactions])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -103,7 +108,7 @@ export default function HistoryScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <ThemedText style={styles.headerTitle}>Historial</ThemedText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
           {['Todos', 'Ingresos', 'Canjes'].map((f) => (

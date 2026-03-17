@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useState, useCallback } from 'react';
 import { FlatList, StyleSheet, View, RefreshControl, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -25,6 +27,7 @@ const TransactionCard = React.memo(({ item }: { item: Transaction }) => (
 
 export default function CashierHistoryScreen() {
     const { user } = useAuth();
+    const insets = useSafeAreaInsets();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -61,9 +64,11 @@ export default function CashierHistoryScreen() {
         }
     }, [user?.id]);
 
-    useEffect(() => {
-        fetchHistory();
-    }, [fetchHistory]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchHistory();
+        }, [fetchHistory])
+    );
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -76,7 +81,7 @@ export default function CashierHistoryScreen() {
 
     return (
         <ThemedView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <ThemedText style={styles.headerTitle}>Historial de Canjes</ThemedText>
                 <ThemedText style={styles.headerSubtitle}>Registros de todas las autorizaciones realizadas por ti.</ThemedText>
             </View>

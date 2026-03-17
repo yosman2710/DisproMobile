@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -11,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function CashierScannerScreen() {
     const router = useRouter();
     const { signOut, user } = useAuth();
+    const insets = useSafeAreaInsets();
     const [permission, requestPermission] = useCameraPermissions();
     const [manualIdModal, setManualIdModal] = useState(false);
     const [manualId, setManualId] = useState('');
@@ -62,7 +64,7 @@ export default function CashierScannerScreen() {
 
     return (
         <ThemedView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <View style={styles.headerTop}>
                     <View>
                         <ThemedText style={styles.title}>DisproMovil</ThemedText>
@@ -119,6 +121,7 @@ export default function CashierScannerScreen() {
                     <ThemedText style={styles.historyBtnText}>Turno Actual</ThemedText>
                 </TouchableOpacity>
             </View>
+            <View style={{ height: insets.bottom }} />
 
             <Modal
                 visible={manualIdModal}

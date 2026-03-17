@@ -1,14 +1,15 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth, UserRole } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
-import { supabase } from '@/lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SECURE_STORE_KEY = 'user_credentials';
 
@@ -23,6 +24,7 @@ export default function LoginScreen() {
     const [isSignup, setIsSignup] = useState(false);
 
     const { signIn, signUp } = useAuth();
+    const insets = useSafeAreaInsets();
     const router = useRouter();
 
     useEffect(() => {
@@ -63,20 +65,20 @@ export default function LoginScreen() {
             return;
         }
         setIsLoggingIn(true);
-        
+
         try {
             // 1. Buscar el email usando la cédula
             const userEmail = await getEmailByCedula(cedula);
-            
+
             if (!userEmail) {
-                 Alert.alert('Error', 'Cédula no registrada o inválida.');
-                 setIsLoggingIn(false);
-                 return;
+                Alert.alert('Error', 'Cédula no registrada o inválida.');
+                setIsLoggingIn(false);
+                return;
             }
 
             // 2. Iniciar sesión con el email encontrado
             const { error } = await signIn(userEmail, password);
-            
+
             if (error) {
                 Alert.alert('Error de Inicio de Sesión', error.message);
             } else {
@@ -132,7 +134,7 @@ export default function LoginScreen() {
             if (result.success) {
                 const { cedula: savedCedula, password: savedPassword } = JSON.parse(credentials);
                 setIsLoggingIn(true);
-                
+
                 const userEmail = await getEmailByCedula(savedCedula);
                 if (!userEmail) {
                     Alert.alert('Error', 'Las credenciales guardadas ya no son válidas (Cédula no encontrada).');
@@ -152,7 +154,7 @@ export default function LoginScreen() {
     };
 
     return (
-        <ThemedView style={styles.container}>
+        <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -160,13 +162,13 @@ export default function LoginScreen() {
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     <View style={styles.logoContainer}>
                         <Image
-                            source={require('@/assets/images/icon.png')}
+                            source={require('@/assets/images/logo-disprocar.png')}
                             style={styles.logo}
-                            resizeMode="contain"
+                            contentFit="contain"
                         />
                         <ThemedText type="title" style={styles.title}>DisproMovil</ThemedText>
                         <ThemedText style={styles.subtitle}>
-                            {isSignup ? 'Crea tu cuenta de ' + (selectedRole === 'cajero' ? 'Cajero' : 'Empleado') : 'Gestión de préstamos y clientes'}
+                            {isSignup ? 'Crea tu cuenta de ' + (selectedRole === 'cajero' ? 'Cajero' : 'Empleado') : 'Gestión de administración de canjes'}
                         </ThemedText>
                     </View>
 
@@ -348,8 +350,8 @@ const styles = StyleSheet.create({
         marginBottom: 32,
     },
     logo: {
-        width: 100,
-        height: 100,
+        width: 300,
+        height: 150,
         marginBottom: 16,
     },
     title: {

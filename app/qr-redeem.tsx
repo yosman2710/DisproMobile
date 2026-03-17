@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Dimensions, StyleSheet, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,6 +18,7 @@ import { QRToken } from '@/types/database';
 export default function QRRedeemScreen() {
     const router = useRouter();
     const { user } = useAuth();
+    const insets = useSafeAreaInsets();
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -99,7 +101,7 @@ export default function QRRedeemScreen() {
 
     return (
         <ThemedView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                     <Ionicons name="chevron-back" size={24} color="#1a237e" />
                 </TouchableOpacity>
@@ -156,6 +158,7 @@ export default function QRRedeemScreen() {
                     <ThemedText style={styles.cancelBtnText}>Cancelar Canje</ThemedText>
                 </TouchableOpacity>
             </View>
+            <View style={{ height: insets.bottom }} />
         </ThemedView>
     );
 }
