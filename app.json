@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Dispro",
-    "slug": "Dispro",
+    "name": "DisproMovil",
+    "slug": "DisproMovil",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon-mobile.png",
-    "scheme": "dispro",
+    "scheme": "dispromovil",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
