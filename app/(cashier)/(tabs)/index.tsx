@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { useAuth } from '@/context/AuthContext';
 
 export default function CashierScannerScreen() {
@@ -17,6 +18,7 @@ export default function CashierScannerScreen() {
     const [manualIdModal, setManualIdModal] = useState(false);
     const [manualId, setManualId] = useState('');
     const [isScanning, setIsScanning] = useState(true);
+    const [isChangePasswordVisible, setIsChangePasswordVisible] = useState(false);
 
     if (!permission) {
         return (
@@ -71,9 +73,17 @@ export default function CashierScannerScreen() {
                         <ThemedText style={styles.roleSub}>Hola, {user?.user_metadata.nombre} 👋</ThemedText>
                         
                     </View>
-                    <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
-                        <Ionicons name="log-out-outline" size={22} color="#F44336" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <TouchableOpacity
+                            onPress={() => setIsChangePasswordVisible(true)}
+                            style={[styles.logoutBtn, { backgroundColor: 'rgba(0, 122, 255, 0.05)' }]}
+                        >
+                            <Ionicons name="key-outline" size={22} color="#007AFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => signOut()} style={styles.logoutBtn}>
+                            <Ionicons name="log-out-outline" size={22} color="#F44336" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -161,6 +171,11 @@ export default function CashierScannerScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <ChangePasswordModal
+                visible={isChangePasswordVisible}
+                onClose={() => setIsChangePasswordVisible(false)}
+            />
         </ThemedView>
     );
 }

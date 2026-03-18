@@ -5,6 +5,7 @@ import React, { useCallback, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/context/AuthContext';
@@ -30,6 +31,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [recentMovements, setRecentMovements] = useState<Transaction[]>([]);
   const [selectedItem, setSelectedItem] = useState<Transaction | null>(null);
+  const [isChangePasswordVisible, setIsChangePasswordVisible] = useState(false);
 
   const fetchProfileData = useCallback(async () => {
     if (!user) return;
@@ -119,16 +121,26 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <ThemedText style={styles.title}>DisproMovil</ThemedText>
         <View style={styles.headerTop}>
-          <ThemedText style={styles.welcomeTitle}>Hola, {profileName || 'Usuario'} 👋</ThemedText>
-          <TouchableOpacity
-            onPress={() => signOut()}
-            style={styles.logoutBtn}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#F44336" />
-          </TouchableOpacity>
+          <ThemedText style={styles.title}>DisproMovil</ThemedText>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => setIsChangePasswordVisible(true)}
+              style={[styles.logoutBtn, { backgroundColor: 'rgba(0, 122, 255, 0.05)', marginRight: 10 }]}
+            >
+              <Ionicons name="key-outline" size={22} color="#007AFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => signOut()}
+              style={styles.logoutBtn}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#F44336" />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        <ThemedText style={styles.welcomeTitle}>Hola, {profileName || 'Usuario'} 👋</ThemedText>
+
 
         <View style={styles.balanceCard}>
           <LinearGradient
@@ -245,6 +257,11 @@ export default function HomeScreen() {
           </ThemedView>
         </View>
       </Modal>
+
+      <ChangePasswordModal
+        visible={isChangePasswordVisible}
+        onClose={() => setIsChangePasswordVisible(false)}
+      />
     </ThemedView>
   );
 }
@@ -279,7 +296,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 10,
   },
   title: {
     fontSize: 26,
@@ -290,6 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#98999fff',
+    paddingBottom: 20,
   },
   logoutBtn: {
     padding: 10,
