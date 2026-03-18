@@ -4,7 +4,7 @@
     "slug": "DisproMovil",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon-mobile.png",
+    "icon": "./assets/images/icon_fixed.png",
     "scheme": "dispromovil",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -18,7 +18,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.yosman2710.DisproMovil"
+      "package": "com.yosman2710.DisproMovil",
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "output": "static",
@@ -53,8 +57,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1ce21c70-0a24-40fa-ad31-8ad57ffc64c6"
+        "projectId": "b7a2b2f5-8241-4124-985c-30827caead46"
       }
-    }
+    },
+    "owner": "yoshionova"
   }
 }
