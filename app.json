@@ -18,6 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "versionCode": 1,
       "package": "com.yosman2710.DisproMovil",
       "permissions": [
         "android.permission.USE_BIOMETRIC",
